@@ -1,6 +1,6 @@
 # Installing Engage PC Recomp
 
-The Windows setup pipeline passed a local installation test on a second drive. **There is no published installer asset yet.** This page documents its installation flow; do not download a TotK setup package for Engage.
+Windows setup is available as an [experimental prerelease](https://github.com/veneito/engage-pc-recomp/releases/tag/engage-v0.1.0-alpha.2). The setup pipeline passed a local installation test on a second drive; clean-machine and full-game testing remain outstanding. Use the Engage setup package below.
 
 ## What you need
 
@@ -21,7 +21,7 @@ Setup includes Python, the compiler and a self-contained extractor. You do not n
 
 ![Engage Setup with required files grouped above the optional DLC and title-key inputs](screenshots/setup.png)
 
-1. Download the **Engage-Setup Windows ZIP** from this repository's Releases page when available. Extract the entire ZIP; keep its folders together.
+1. Download the [Engage-Setup Windows ZIP](https://github.com/veneito/engage-pc-recomp/releases/download/engage-v0.1.0-alpha.2/Engage-Setup-0.1.0-alpha.2-windows.zip). Extract the entire ZIP; keep its folders together. The [release page](https://github.com/veneito/engage-pc-recomp/releases/tag/engage-v0.1.0-alpha.2) includes SHA-256 checksums.
 2. Open **Engage-Setup.exe**. Choose your base game, update **2.0.0**, `prod.keys` and extracted firmware folder. Add either DLC and `title.keys` if needed.
 3. Choose a separate, empty installation folder, such as `D:\Games\Engage`. Select **Install Engage**. Setup checks your hardware, verifies and extracts the game, recompiles it locally, and installs it. Allow 20–60 minutes initially; time varies by CPU and storage.
 4. Select **Play Engage**. Later, open **Play Engage.cmd** in your installation folder. Press **F1** for settings and controls.

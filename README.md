@@ -5,9 +5,9 @@ Experimental native Windows x86-64 recompilation of **Fire Emblem Engage 2.0.0**
 [![Source checks](https://github.com/veneito/engage-pc-recomp/actions/workflows/content-guard.yml/badge.svg)](https://github.com/veneito/engage-pc-recomp/actions/workflows/content-guard.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-**Early alpha. The Windows setup pipeline passed a local installation test; no installer asset has been published yet.** First-battle gameplay and audio work in the tested development build. Full-game compatibility is still being established.
+**Early alpha. [Windows setup is available](https://github.com/veneito/engage-pc-recomp/releases/tag/engage-v0.1.0-alpha.2).** The setup pipeline passed a local installation test. First-battle gameplay and audio work in the tested development build; full-game compatibility is still being established.
 
-[Installation guide](docs/installing-engage.md) · [Report a bug](https://github.com/veneito/engage-pc-recomp/issues/new/choose) · [Build from source](docs/building-engage.md)
+[Download Windows Setup](https://github.com/veneito/engage-pc-recomp/releases/download/engage-v0.1.0-alpha.2/Engage-Setup-0.1.0-alpha.2-windows.zip) · [Installation guide](docs/installing-engage.md) · [Report a bug](https://github.com/veneito/engage-pc-recomp/issues/new/choose) · [Build from source](docs/building-engage.md)
 
 ## Game files stay on your computer
 
@@ -29,7 +29,7 @@ The current evidence is from a Windows 11 machine with an NVIDIA RTX 4060. This 
 
 The setup follows the same local-build approach as [TotK Recomp](https://github.com/valentderah/totk-pc-recomp): download setup, select your files, install, and play. Python, the compiler and the extractor are bundled. Your game is compiled on your PC.
 
-1. Extract the **Engage-Setup Windows ZIP** when it becomes available in Releases.
+1. Download the [Engage-Setup Windows ZIP](https://github.com/veneito/engage-pc-recomp/releases/download/engage-v0.1.0-alpha.2/Engage-Setup-0.1.0-alpha.2-windows.zip) and extract the entire archive.
 2. Run **Engage-Setup.exe** and select your base game, **2.0.0** update, keys and firmware folder. Either DLC is optional.
 3. Choose an install folder with **40 GiB free**, then select **Install Engage**.
 4. When setup finishes, select **Play Engage**. Press **F1** for settings.
