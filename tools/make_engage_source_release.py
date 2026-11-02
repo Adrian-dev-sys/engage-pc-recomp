@@ -37,7 +37,7 @@ def audit_member(name, data, regular=True):
 
 
 def make_release(ref, out):
-    commit = subprocess.check_output(['git', '-C', str(ROOT), 'rev-parse', '--verify', ref + '^{commit}'], text=True).strip()
+    commit = subprocess.check_output(['git', '-C', str(ROOT), 'rev-parse', '--verify', '--end-of-options', ref + '^{commit}'], text=True).strip()
     raw = subprocess.check_output(['git', '-C', str(ROOT), 'archive', '--format=tar', commit])
     files = []
     with tarfile.open(fileobj=io.BytesIO(raw), mode='r:') as archive:

@@ -18,7 +18,10 @@ jobs:
           python-version: '3.12'
       - run: python tools/check_content.py
       - name: Audit the exact checked-out commit
-        run: python tools/make_engage_source_release.py --ref HEAD --out build/source-release
+        run: |
+          ref=HEAD
+          if [ "$GITHUB_REF_TYPE" = tag ]; then ref="$GITHUB_REF_NAME"; fi
+          python tools/make_engage_source_release.py --ref "$ref" --out build/source-release
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: engage-source-preview

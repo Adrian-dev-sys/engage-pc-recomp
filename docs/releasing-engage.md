@@ -24,4 +24,4 @@ A setup release also needs a clean-machine end-to-end test, cancellation/retry c
 
 ## Known rendering report
 
-The unit-information panel was reported darker in one screenshot and blue in another. The examples show different states (a unit alone versus paired with Marth); the cause is not established. Compare matching unit/state/settings before changing global gamma, blending or shader behavior. Track this as an investigation, not a confirmed fixed bug or a full rendering validation.
+The unit-information panel was reported darker in one screenshot and blue in another. The examples show different states (a unit alone versus paired with Marth). A [normal-state gameplay reference](https://images.igdb.com/igdb/image/upload/t_1080p_2x/sciwxx.webp) also shows a dark panel for Alear without an Emblem partner. This supports a state-dependent UI difference; it does not establish a renderer defect or validate every color. Compare matching unit/state/settings before changing global gamma, blending or shader behavior. No renderer change was made from these screenshots.

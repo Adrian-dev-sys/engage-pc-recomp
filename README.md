@@ -16,7 +16,7 @@ This repository contains the port's source and tools, not the game. Supply your 
 - Keyboard/gamepad input and the F1 settings menu work in the tested build.
 - The two supported DLC packages are extracted and mounted; DLC gameplay is unverified.
 
-Known limits: save/load, the post-battle transition and long-session stability still need testing. Rendering differences remain under investigation, including the unit-information panel's color in different states. Vulkan validation coverage is not established. The tested configuration disables the Vulkan recorder.
+Known limits: save/load, the post-battle transition and long-session stability still need testing. Rendering remains experimental. The reported dark-versus-blue unit-information panel also appears in gameplay references with different Emblem-pairing states; a matching-state rendering fault has not been established. Vulkan validation coverage is not established. The tested configuration disables the Vulkan recorder.
 
 The current evidence is from a Windows 11 machine with an NVIDIA RTX 4060. This is not a claim of compatibility with every GPU or of full-game completion. Linux, Steam Deck, performance patches and inherited TotK features are not verified for Engage.
 
