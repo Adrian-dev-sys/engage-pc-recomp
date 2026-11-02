@@ -35,7 +35,9 @@ typedef struct { const char *name; uint64_t entries; } InitCount;
 static const InitCount inits_111[] = {{"main", 10668}, {"subsdk0", 45}, {"sdk", 116}};
 static const InitCount inits_121[] = {{"main", 10673}, {"subsdk0", 45}, {"sdk", 116}};
 static const InitCount inits_143[] = {{"main", 10717}, {"subsdk0", 45}, {"sdk", 83}};
-#define expected_inits (RT_V143 ? inits_143 : RT_V111 ? inits_111 : inits_121)
+// DT_INIT_ARRAYSZ measured in the verified Engage 2.0.0 modules.
+static const InitCount inits_engage[] = {{"main", 379}, {"subsdk0", 45}, {"sdk", 112}};
+#define expected_inits (RT_ENGAGE ? inits_engage : RT_V143 ? inits_143 : RT_V111 ? inits_111 : inits_121)
 
 static volatile int32_t inits_done, checkpoint_seen;
 uint64_t rt_guest_start_ns;
@@ -109,7 +111,7 @@ void rt_boot_event(const char *what, Cpu *c, const char *detail) {
     uint64_t ret = c->x[30];
     caller(c, at, sizeof at);
     if (!strcmp(what, "checkpoint")) {
-        if (ret != main_mod->base + CHECKPOINT_RET)
+        if (!RT_ENGAGE && ret != main_mod->base + CHECKPOINT_RET)
             rt_fatal("boot: checkpoint %s reached from %s, expected main+%#llx", detail, at,
                      (unsigned long long)CHECKPOINT_RET);
         if (!plat_cas32(&inits_done, 0, 0)) rt_fatal("boot: checkpoint %s before DT_INIT", detail);
@@ -122,10 +124,10 @@ void rt_boot_event(const char *what, Cpu *c, const char *detail) {
         return;
     }
     if (!strcmp(what, "nvn")) {
-        if (ret != main_mod->base + NVN_RET)
+        if (!RT_ENGAGE && ret != main_mod->base + NVN_RET)
             rt_fatal("boot: first NVN call %s(\"%s\") from %s, expected main+%#llx", "nvnBootstrapLoader", detail, at,
                      (unsigned long long)NVN_RET);
-        if (!plat_cas32(&checkpoint_seen, 0, 0))
+        if (!RT_ENGAGE && !plat_cas32(&checkpoint_seen, 0, 0))
             rt_fatal("boot: first NVN call before the SetFocusHandlingMode checkpoint");
         rt_logf("boot: first NVN call nvnBootstrapLoader(\"%s\") from main+%#llx\n", detail,
                (unsigned long long)(ret - main_mod->base));

@@ -164,6 +164,16 @@ void vk_dump_present(uint64_t frame);    // vk_be_present: waits for the dump fr
 void vk_c0_fill(uint8_t bank[VK_C0_BYTES], int stage, const p_bind_buf ssbo[16], const p_bind_buf ubo[16],
                 const uint32_t dispatch[3], uint32_t base_instance);
 
+// Resolve NVN's independently bound texture and sampler into one Vulkan combined handle.
+static inline uint64_t vk_exec_resource_handle(const VkExec *ex, const GfxShaderRes *r, int stage, int image, int index) {
+    int slot = r->slot + index;
+    uint64_t h = image ? (slot >= 0 && slot < 32 ? ex->img[stage][slot] : 0)
+                       : (slot >= 0 && slot < 128 ? ex->tex[stage][slot] : 0);
+    if (!image && (r->handle >> 28) == 1 && r->sampler_slot >= 0 && r->sampler_slot < 128)
+        h = (h & 0xfffff) | ex->samp[stage][r->sampler_slot];
+    return h;
+}
+
 // Handler hooks. vk_exec.c defines both WEAK: they stop with rt_fatal naming the op.
 // vk_exec_draw.c: OP_DRAW, OP_DRAW_IDX, OP_DISPATCH, OP_BIND_* (program, state, vattr, vstream, vbuf, ubo, ssbo, tex,
 // samp, img), OP_UPDATE_UB, OP_DRAW_IDX_IND, OP_DISPATCH_IND. payload: nvn_op_payload of the record.

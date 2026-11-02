@@ -332,6 +332,9 @@ static void probe_sync_events(void) {
     sf->fence = nvn_fence_last() + 100;
     CHECK(CALL(nvnSyncWait, U(&sync_future), 1000000) == NVN_SYNC_WAIT_RESULT_TIMEOUT_EXPIRED,
           "a fence value that was never submitted is never reached");
+    CHECK(CALL(nvnQueueWaitSync, U(&queue), U(&sync_future)) == 0, "queue wait rejects a never-submitted fence");
+    sf->fenced = 3; sf->fence = 0;
+    CHECK(CALL(nvnQueueWaitSync, U(&queue), U(&sync_future)) == 1, "queue wait accepts an acquired texture");
     CALL(nvnSyncFinalize, U(&sync_future));
     CHECK(sf->magic == 0, "SyncFinalize");
 
@@ -799,7 +802,34 @@ static void probe_null_effects(void) {
     n_objects += 2;
 }
 
+static void probe_program_control_lifetime(void) {
+    if (!RT_ENGAGE) return;
+    NVNprogram object;
+    uint8_t control[0x880]; memset(control, 0x5a, sizeof control);
+    NVNshaderData stages[6];
+    for (int i = 0; i < 6; i++) stages[i] = (NVNshaderData){0x1000u + (unsigned)i * 0x100, control};
+    CHECK(CALL(nvnProgramInitialize, U(&object), U(&dev)) == 1, "program initialize for owned controls");
+    CHECK(CALL(nvnProgramSetShaders, U(&object), 6, U(stages)) == 1, "program copies six control sections");
+    memset(control, 0, sizeof control);
+    prog_t *p = (prog_t *)&object;
+    for (int i = 0; i < 6; i++) {
+        const uint8_t *saved = p->sd[i].control;
+        CHECK(saved != control && saved[0] == 0x5a && saved[0x87f] == 0x5a && p->sd[i].data == stages[i].data,
+              "stage %d survives caller control overwrite", i);
+    }
+    uint64_t serial = p->serial;
+    CHECK(!CALL(nvnProgramSetShaders, U(&object), 7, U(stages)) && p->serial == serial,
+          "invalid stage count preserves program controls");
+    CHECK(CALL(nvnProgramSetShaders, U(&object), 1, U(stages)) == 1 && *(uint8_t *)p->sd[0].control == 0,
+          "replacement owns its new control section");
+    CHECK(CALL(nvnProgramSetShaders, U(&object), 0, 0) == 1 && !p->owned_control && !p->nstage,
+          "empty shader set releases owned controls");
+    CALL(nvnProgramFinalize, U(&object));
+    CHECK(!p->owned_control && !p->serial && !p->magic, "program finalization releases controls");
+}
+
 static void probe_main(Cpu *unused) {
+    probe_program_control_lifetime();
     (void)unused;
     probe_device_and_pools();
     probe_buffers();

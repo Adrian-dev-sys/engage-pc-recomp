@@ -48,9 +48,17 @@ static class SwshXlate
         string Get(string table, int slot) => _job[table] is JsonObject t && t[slot.ToString()] is JsonNode n ? (n is JsonObject o ? (string)o["type"] : (string)n) : null;
         int TexSlot(int handle, int cbufSlot)
         {
-            (int off0, _, _) = TextureHandle.UnpackOffsets(handle);
-            int bytes = off0 * 4;
-            return (cbufSlot < 0 || (cbufSlot & 0xffff) == 2) && bytes >= TexBase && bytes < SampBase && (bytes - TexBase) % 8 == 0 ? (bytes - TexBase) / 8 : -1;
+            var (offset0, offset1, kind) = TextureHandle.UnpackOffsets(handle);
+            var (buffer0, buffer1) = TextureHandle.UnpackSlots(cbufSlot, 2);
+            int candidates = kind == TextureHandleType.SeparateSamplerHandle ? 2 : 1;
+            for (int i = 0; i < candidates; i++)
+            {
+                int bytes = (i == 0 ? offset0 : offset1) * 4;
+                int buffer = i == 0 ? buffer0 : buffer1;
+                if (buffer == 2 && bytes >= TexBase && bytes < SampBase && (bytes - TexBase) % 8 == 0)
+                    return (bytes - TexBase) / 8;
+            }
+            return -1;
         }
         public SamplerType QuerySamplerType(int handle, int cbufSlot = -1)
         {

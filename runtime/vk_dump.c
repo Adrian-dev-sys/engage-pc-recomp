@@ -594,7 +594,7 @@ static void describe_bindings(Str *b, const VkExec *ex, const VkPipeInfo *info) 
         }
         for (uint32_t k = 0; k < (bd->count ? bd->count : 1u); k++) {
             int slot = r->slot + (int)k;
-            uint64_t h = handle_of(ex, st, slot, img);
+            uint64_t h = vk_exec_resource_handle(ex, r, st, img, (int)k);
             sp(b, "    %s %s slot %d decl %s%s: ", stn[st], img ? "img" : "tex", slot, decl_type(r->type, dt),
                img && (r->flags & 4) ? " store" : "");
             if (!h) { sp(b, "no handle (dummy)\n"); continue; }
@@ -662,7 +662,7 @@ static uint64_t bindings_hash(const VkExec *ex, const VkPipeInfo *info) {
         }
         if (!bd->res || (bd->kind != GFX_RES_TEX && bd->kind != GFX_RES_IMG)) continue;
         for (uint32_t k = 0; k < (bd->count ? bd->count : 1u); k++)
-            h = (h ^ handle_of(ex, nvn_stage(bd->stage), bd->res->slot + (int)k, bd->kind == GFX_RES_IMG)) * 0x100000001b3ull;
+            h = (h ^ vk_exec_resource_handle(ex, bd->res, nvn_stage(bd->stage), bd->kind == GFX_RES_IMG, (int)k)) * 0x100000001b3ull;
     }
     return h;
 }

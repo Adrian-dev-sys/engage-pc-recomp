@@ -16,7 +16,7 @@
 #define ST_FREE 0u
 #define ST_STACK 0xBu
 #define PERM_RW 3u
-#define PROGRAM_ID 0x0100f2c0115b6000ull
+#define PROGRAM_ID (RT_ENGAGE ? 0x0100a6301214e000ull : 0x0100f2c0115b6000ull)
 
 static uint64_t g_svcs;
 void (*volatile svc_test_exit_hook)(unsigned code);

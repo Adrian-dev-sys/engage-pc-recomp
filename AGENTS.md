@@ -1,4 +1,11 @@
-# TotK Recomp
+# Engage bring-up on TotK Recomp
+
+For this branch, read [docs/engage-port.md](docs/engage-port.md) first. Target Engage
+2.0.0; inherited commands below describe TotK unless explicitly adapted. Never apply
+TotK patches, hashes, or shader lists to Engage. Record observed results separately
+from upstream reports. Keep refs/nxnative read-only at the documented revision.
+
+# TotK Recomp baseline
 
 Static recompilation of *Tears of the Kingdom* (Switch, ARM64) into a native Windows x86-64 exe with a Vulkan renderer. Design: [docs/architecture.md](docs/architecture.md). Toolchain, build commands and tests: [docs/building.md](docs/building.md).
 

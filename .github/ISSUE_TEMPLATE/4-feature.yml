@@ -7,7 +7,7 @@ body:
     attributes:
       label: Existing issues
       options:
-        - label: I [searched open and closed issues](https://github.com/valentderah/totk-pc-recomp/issues?q=is%3Aissue) and the Planned section of the README for this request.
+        - label: I [searched open and closed issues](https://github.com/veneito/engage-pc-recomp/issues?q=is%3Aissue) and the Current status section of the README for this request.
           required: true
   - type: textarea
     id: request

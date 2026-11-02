@@ -169,7 +169,10 @@ static void make_hash(Mod *m) {
 static uint64_t module_symbol(const Mod *m, const char *name) {
     for (uint32_t p = fnv(name) & m->hash_mask; m->hash[p]; p = (p + 1) & m->hash_mask) {
         uint32_t i = m->hash[p];
-        if (!strcmp(name, sym_name(m, i))) return m->pub.base + m->syms[i].value;
+        if (!strcmp(name, sym_name(m, i))) {
+            if (RT_ENGAGE && (!(m->syms[i].info >> 4) || (m->syms[i].other & 3))) return 0;
+            return m->pub.base + m->syms[i].value;
+        }
     }
     return 0;
 }
@@ -326,6 +329,12 @@ static Res resolve(Mod *m, uint32_t si, int jump) {
     if (cache->kind != RES_UNSET) return *cache;
     const char *name = sym_name(m, si);
     uint64_t guest = sym_defined(m, si) ? m->pub.base + m->syms[si].value : find_symbol(name, NULL);
+    // Unity's new/delete in main must also preempt the SDK's definitions, or an SDK
+    // string destructor frees Unity memory through the wrong allocator (nxnative loader.c bind_sym).
+    if (RT_ENGAGE && sym_defined(m, si) && (m->syms[si].info >> 4) && !(m->syms[si].other & 3)) {
+        uint64_t global = find_symbol(name, NULL);
+        if (global) guest = global;
+    }
     GuestFn f;
     Res r;
     if (jump && (f = hostfn_observer(name))) {
@@ -433,6 +442,25 @@ static void verify_identity(void) {
         }
     }
     if (!identity_refs) rt_fatal("loader: no reference to nnMain to check");
+    if (RT_ENGAGE) {
+        unsigned checked = 0;
+        for (int i = 1; i < nmods; i++) {
+            Mod *m = &mods[i];
+            for (uint64_t j = 0; j < m->njmprel; j++) {
+                const Elf64Rela *rel = &m->jmprel[j];
+                uint32_t si = (uint32_t)(rel->info >> 32);
+                const char *name = sym_name(m, si);
+                if (strcmp(name, "_ZdlPv") && strcmp(name, "_ZdaPv") && strcmp(name, "_Znwm") && strcmp(name, "_Znam")) continue;
+                uint64_t expected = module_symbol(&mods[0], name);
+                if (!expected) continue;
+                if (LD64(m->pub.base + rel->off) != expected)
+                    rt_fatal("loader: %s %s does not bind to Unity's allocator in main", m->pub.name, name);
+                checked++;
+            }
+        }
+        if (!checked) rt_fatal("loader: no Unity allocator bindings verified");
+        rt_log("loader: %u Unity allocator bindings verified", checked);
+    }
 }
 
 // .text and .rodata read-only: guest code never executes from guest memory, and nothing may write them.

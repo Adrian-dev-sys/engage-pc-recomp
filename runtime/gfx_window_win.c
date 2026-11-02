@@ -288,7 +288,7 @@ static void window_main(void *arg) {
                                           GetSystemMetrics(SM_CYICON), LR_SHARED),
                       .hIconSm = LoadImageW(inst, MAKEINTRESOURCEW(1), IMAGE_ICON, GetSystemMetrics(SM_CXSMICON),
                                             GetSystemMetrics(SM_CYSMICON), LR_SHARED),
-                      .hCursor = LoadCursorW(NULL, (LPCWSTR)IDC_ARROW), .lpszClassName = L"TotKRecompWindow"};
+                      .hCursor = LoadCursorW(NULL, (LPCWSTR)IDC_ARROW), .lpszClassName = RT_ENGAGE ? L"EngagePCRecompWindow" : L"TotKRecompWindow"};
     RegisterClassExW(&wc);
     int cw, ch, ow, oh;
     cfg_window_size(&cw, &ch);
@@ -299,7 +299,7 @@ static void window_main(void *arg) {
     // button flashes until it is brought up, and TOTK_FULLSCREEN waits for that first activation.
     // TOTK_BACKGROUND_WINDOW=1 (test runs): no flashing, never fullscreen at start, and F11 keeps the window's place.
     int background = g_background = cfg_get("TOTK_BACKGROUND_WINDOW") && atoi(cfg_get("TOTK_BACKGROUND_WINDOW"));
-    g_hwnd = CreateWindowExW(0, wc.lpszClassName, L"TotK Recomp", WND_STYLE, CW_USEDEFAULT, CW_USEDEFAULT, ow, oh, NULL,
+    g_hwnd = CreateWindowExW(0, wc.lpszClassName, RT_ENGAGE ? L"Engage PC Recomp" : L"TotK Recomp", WND_STYLE, CW_USEDEFAULT, CW_USEDEFAULT, ow, oh, NULL,
                              NULL, inst, NULL);
     if (!g_hwnd) {
         rt_log("gfx: CreateWindowEx failed (%lu)", GetLastError());

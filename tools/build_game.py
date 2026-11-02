@@ -245,6 +245,7 @@ def c_string(s):
     return '"' + s.replace('\\', '\\\\').replace('"', '\\"') + '"'
 
 
+APP_ICON = ROOT / 'runtime' / 'totk.ico'
 RUNTIME = ROOT / 'runtime'   # --runtime: a copy of runtime/ lets a task build without touching the shared tree
 
 
@@ -299,7 +300,11 @@ def module_glue(layout, linked, hashes, paths, version):
     for name in ('exefs', 'romfs', 'profile'):
         out.append(f'const char rt_default_{name}[] = {c_string(paths[name].as_posix())};')
     number = int(DISPLAY_VERSIONS[version].replace('.', '')) if version in DISPLAY_VERSIONS else 0   # 1.4.3 -> 143
-    out += [f'const int rt_game_version = {number};', f'const char rt_port_version[] = {c_string(port_version())};', '']
+    game_id = 1 if version == 'engage-v200' else 0
+    if game_id:
+        number = 200
+    out += [f'const int rt_game_id = {game_id};', f'const int rt_game_version = {number};',
+            f'const char rt_port_version[] = {c_string(port_version())};', '']
     return '\n'.join(out)
 
 
@@ -379,7 +384,7 @@ def ninja_file(gen, out, mods, pool_depth, skip=(), prebuilt=False, runtime_lib=
         o = runtime_object(out, src)
         if src.suffix == '.rc':   # windres writes no depfile: the files totk.rc embeds are listed by hand
             lines.append(f'build {ninja_path(o)}: rc {ninja_path(src)} | {ninja_path(RUNTIME / "totk.manifest")} '
-                         f'{ninja_path(RUNTIME / "totk.ico")}')
+                         f'{ninja_path(APP_ICON)}')
         else:
             lines.append(f'build {ninja_path(o)}: cc_rt {ninja_path(src)}')
         rt.append(o)

@@ -187,7 +187,9 @@ extern const char rt_default_exefs[], rt_default_romfs[], rt_default_profile[];
 extern const int rt_game_version;                          // the game build: 111 (1.1.1), 121 (1.2.1) or 143 (1.4.3)
 extern const char rt_port_version[];                       // VERSION at the build's root: 0.1.0, 0.1.0+973c626 in a release
 #define RT_V111 (rt_game_version == 111)                    // 1.1.1: its own boot constants and data slots
-#define RT_V143 (rt_game_version >= 143)
+extern const int rt_game_id;                               // 0 TotK, 1 Engage
+#define RT_ENGAGE (rt_game_id == 1)
+#define RT_V143 (!RT_ENGAGE && rt_game_version >= 143)
 
 // ---- kernel (kernel.c)
 typedef struct RtThread RtThread;
@@ -293,6 +295,7 @@ void rt_boot(void);                                        // boot.c
 // Modes of totk.exe. main.c has run mem_init and parsed the paths; each mode calls ldr_load itself if it needs the
 // modules, registers its host functions, then seals (hostfn_seal, or implicitly at the first rt_call). Return the
 // process exit code.
+int probe_engage_input(void);
 int probe_cfg(void);                                       // cfg_probe.c
 int probe_dpi(void);                                       // dpi_probe_win.c (Windows only)
 int probe_loader(void), probe_kernel(void), probe_ipc(void), probe_services(void), probe_fs(void);
@@ -306,3 +309,5 @@ int probe_vkmem(void), probe_vkexec(void), probe_astc(void);                 // 
 int probe_movie(void);                                     // movie_probe.c: host VP9 movie::Decoder on one RomFS movie
 int vk_pipeline_prepare_shaders(void);                     // vk_pipeline.c: --prepare-shaders (tools/prepare_shaders.py)
 int vk_pipeline_warm_shaders(void);                        // vk_pipeline.c: --warm-shaders (tools/build_game.py)
+
+int probe_audout(void);

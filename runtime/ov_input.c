@@ -97,6 +97,16 @@ static void npad_states(Cpu *c, uint32_t want) {
     *out = s;
     ret_x(c, 1);
 }
+// The single-state SDK 12 ABI takes the id as its second argument.
+static void npad_state(Cpu *c, uint32_t want) {
+    c->x[2] = c->x[1];
+    c->x[1] = 1;
+    npad_states(c, want);
+}
+static void ov_state_full_key(Cpu *c) { npad_state(c, STYLE_FULL_KEY); }
+static void ov_state_handheld(Cpu *c) { npad_state(c, STYLE_HANDHELD); }
+static void ov_state_joycon(Cpu *c) { npad_state(c, 0); }
+
 static void ov_states_full_key(Cpu *c) { npad_states(c, STYLE_FULL_KEY); }
 static void ov_states_handheld(Cpu *c) { npad_states(c, STYLE_HANDHELD); }
 static void ov_states_joycon(Cpu *c) { npad_states(c, 0); }
@@ -479,6 +489,11 @@ HOST_OVERRIDE("_ZN2nn3hid14InitializeNpadEv", ov_initialize_npad);
 HOST_OVERRIDE("_ZN2nn3hid22SetSupportedNpadIdTypeEPKjm", ov_supported_ids);
 HOST_OVERRIDE("_ZN2nn3hid24SetSupportedNpadStyleSetENS_4util10BitFlagSetILi32ENS0_12NpadStyleTagEEE", ov_supported_styles);
 HOST_OVERRIDE("_ZN2nn3hid15GetNpadStyleSetERKj", ov_style_set);
+HOST_OVERRIDE("_ZN2nn3hid12GetNpadStateEPNS0_16NpadFullKeyStateERKj", ov_state_full_key);
+HOST_OVERRIDE("_ZN2nn3hid12GetNpadStateEPNS0_17NpadHandheldStateERKj", ov_state_handheld);
+HOST_OVERRIDE("_ZN2nn3hid12GetNpadStateEPNS0_16NpadJoyDualStateERKj", ov_state_joycon);
+HOST_OVERRIDE("_ZN2nn3hid12GetNpadStateEPNS0_16NpadJoyLeftStateERKj", ov_state_joycon);
+HOST_OVERRIDE("_ZN2nn3hid12GetNpadStateEPNS0_17NpadJoyRightStateERKj", ov_state_joycon);
 HOST_OVERRIDE("_ZN2nn3hid13GetNpadStatesEPNS0_16NpadFullKeyStateEiRKj", ov_states_full_key);
 HOST_OVERRIDE("_ZN2nn3hid13GetNpadStatesEPNS0_16NpadJoyDualStateEiRKj", ov_states_joycon);
 HOST_OVERRIDE("_ZN2nn3hid13GetNpadStatesEPNS0_16NpadJoyLeftStateEiRKj", ov_states_joycon);
@@ -513,3 +528,46 @@ HOST_OVERRIDE("_ZN2nn3hid6detail22GetSixAxisSensorStatesEPiPNS0_18SixAxisSensorS
               ov_six_states);
 HOST_OVERRIDE("_ZN2nn3hid6detail21GetSixAxisSensorStateEPNS0_18SixAxisSensorStateERKNS0_19SixAxisSensorHandleE",
               ov_six_state);
+
+
+int probe_engage_input(void) {
+    Cpu c = {0};
+    uint32_t id = pad_id();
+    c.x[0] = (uint64_t)&id; c.x[1] = 1; ov_supported_ids(&c);
+    c.x[0] = 3; ov_supported_styles(&c); ov_initialize_npad(&c);
+    const char *symbols[] = {
+        "_ZN2nn3hid12GetNpadStateEPNS0_16NpadFullKeyStateERKj",
+        "_ZN2nn3hid12GetNpadStateEPNS0_17NpadHandheldStateERKj",
+        "_ZN2nn3hid12GetNpadStateEPNS0_16NpadJoyDualStateERKj",
+        "_ZN2nn3hid12GetNpadStateEPNS0_16NpadJoyLeftStateERKj",
+        "_ZN2nn3hid12GetNpadStateEPNS0_17NpadJoyRightStateERKj",
+    };
+    for (unsigned i = 0; i < 5; i++) {
+        struct { NpadState state; uint64_t guard; } out = {.guard = 0x12345678};
+        c.x[0] = (uint64_t)&out.state; c.x[1] = (uint64_t)&id;
+        GuestFn fn = hostfn_override(symbols[i]);
+        if (!fn) rt_fatal("input probe: missing singular state override");
+        fn(&c);
+        int connected = i == (ov_handheld() ? 1u : 0u);
+        if (out.guard != 0x12345678 || !!(out.state.attributes & ATTR_CONNECTED) != connected || !out.state.sampling)
+            rt_fatal("input probe: singular state ABI or connection status, style %u", i);
+    }
+    GuestFn reporting = hostfn_override("_ZN2nn5prepo10InitializeEv");
+    if (!reporting) rt_fatal("input probe: missing offline reporting initialization");
+    reporting(&c);
+    if (c.x[0]) rt_fatal("input probe: offline reporting initialization");
+    GuestFn available = hostfn_override("_ZN2nn4pctl28IsFreeCommunicationAvailableEv");
+    GuestFn begin = hostfn_override("_ZN2nn4pctl25TryBeginFreeCommunicationEb");
+    GuestFn end = hostfn_override("_ZN2nn4pctl20EndFreeCommunicationEv");
+    if (!available || !begin || !end) rt_fatal("input probe: missing offline communication overrides");
+    for (int show_ui = 0; show_ui <= 1; show_ui++) {
+        c.x[0] = (uint64_t)show_ui; begin(&c);
+        if (c.x[0]) rt_fatal("input probe: offline communication was allowed");
+        end(&c); c.x[0] = 0xdead; available(&c);
+        if (c.x[0]) rt_fatal("input probe: offline communication availability");
+    }
+    if (!ov_probe_network_account()) rt_fatal("input probe: local account network availability");
+    if (!ov_probe_exit_sections()) rt_fatal("input probe: nested exit handling sections");
+    rt_log("probe-engage-input: five single-state ABIs, output bounds, offline reporting/communication and exit-section nesting passed");
+    return 0;
+}

@@ -25,7 +25,7 @@
 #include "platform/platform.h"
 #include "romfs_path.h"
 
-#define TOTK_APPLICATION_ID 0x0100f2c0115b6000ull
+#define TOTK_APPLICATION_ID (RT_ENGAGE ? 0x0100a6301214e000ull : 0x0100f2c0115b6000ull)
 #define FILE_BASE 0x200000000ull
 #define DIR_BASE 0x300000000ull
 #define NFILES 1024
@@ -624,6 +624,46 @@ static uint32_t mount_add(const char *name, int kind, const char *root) {
     return 0;
 }
 
+static int aoc_path(int index, char *root, size_t cap) {
+    if (!RT_ENGAGE || index < 1 || index > 2) return 0;
+    if (snprintf(root, cap, "%s/../aoc/%d", rt_config()->romfs, index) >= (int)cap) return 0;
+    char marker[1200];
+    snprintf(marker, sizeof marker, "%s/%s", root, index == 1 ? "e0" : "h0");
+    return plat_file_size(marker) == 0;
+}
+
+int fs_aoc_indices(int *out, int offset, int count) {
+    if (offset < 0 || count < 0) rt_fatal("aoc: invalid list range");
+    int seen = 0, written = 0;
+    for (int index = 1; index <= 2; index++) {
+        char root[1024];
+        if (!aoc_path(index, root, sizeof root)) continue;
+        if (seen++ < offset || written == count) continue;
+        if (out) out[written] = index;
+        written++;
+    }
+    return written;
+}
+
+static void ov_aoc_mount(Cpu *c) {
+    char root[1024];
+    int index = (int32_t)arg_x(c, 1);
+    if (!aoc_path(index, root, sizeof root)) { ret_x(c, FS_R_TARGET_NOT_FOUND); return; }
+    ret_x(c, mount_add(arg_p(c, 0), M_SAVE_RO, root));
+}
+
+static void ov_aoc_cache(Cpu *c) {
+    char root[1024];
+    size_t *out = arg_p(c, 0);
+    if (!out) { ret_x(c, FS_R_INVALID_ARGUMENT); return; }
+    if (!aoc_path((int32_t)arg_x(c, 1), root, sizeof root)) { ret_x(c, FS_R_TARGET_NOT_FOUND); return; }
+    *out = 0x54; // RomFS tables for the root and this package's single two-character marker.
+    ret_x(c, 0);
+}
+
+HOST_OVERRIDE("_ZN2nn2fs17MountAddOnContentEPKciPvm", ov_aoc_mount);
+HOST_OVERRIDE("_ZN2nn2fs31QueryMountAddOnContentCacheSizeEPmi", ov_aoc_cache);
+
 // A path component every host stores under exactly this name: not empty, ".", "..", no reserved character, no trailing
 // dot or space (Windows strips those, which would alias two names).
 static int component_ok(const char *c, size_t n) {
@@ -1026,15 +1066,19 @@ static uint32_t delete_recursive(const char *path) {
 }
 
 static uint32_t open_directory(uint64_t *out, const char *path, int mode) {
-    if (romfs_owns(path)) rt_fatal("fs: OpenDirectory on the RomFS (%s) is not implemented", path);
-    char p[PATH_CAP];
-    uint32_t r = host_path(path, p, sizeof p);
-    if (r) return r;
     if (!out || mode < 1 || mode > 3) return FS_R_INVALID_ARGUMENT;
-    if (plat_fs_kind(p) != PLAT_FS_DIR) return FS_R_PATH_NOT_FOUND;
-    Listing l;
-    int e = list_dir(p, &l);
-    if (e) return fs_result(e);
+    Listing l = {0};
+    if (romfs_owns(path)) {
+        uint32_t result = romfs_list(path, listing_add, &l);
+        if (result) { listing_free(l.e, l.n); return result; }
+    } else {
+        char p[PATH_CAP];
+        uint32_t r = host_path(path, p, sizeof p);
+        if (r) return r;
+        if (plat_fs_kind(p) != PLAT_FS_DIR) return FS_R_PATH_NOT_FOUND;
+        int e = list_dir(p, &l);
+        if (e) { listing_free(l.e, l.n); return fs_result(e); }
+    }
     plat_mutex_lock(&lock);
     for (int i = 0; i < NDIRS; i++)
         if (!dirs[i].used) {
@@ -1078,11 +1122,73 @@ static void close_directory(uint64_t h) {
     listing_free(d.e, d.n);
 }
 
+int probe_engage_fs(void) {
+    if (!RT_ENGAGE) return 2;
+    int bad = 0, indices[2] = {0};
+#define ENG_CHECK(expr) do { if (!(expr)) { printf("engage-fs: FAIL %s\n", #expr); bad++; } } while (0)
+    ENG_CHECK(fs_aoc_indices(indices, 0, 2) == 2 && indices[0] == 1 && indices[1] == 2);
+    ENG_CHECK(fs_aoc_indices(indices, 1, 2) == 1 && indices[0] == 2);
+    for (int index = 1; index <= 2; index++) {
+        char root[1024], name[16], path[32];
+        ENG_CHECK(aoc_path(index, root, sizeof root));
+        snprintf(name, sizeof name, "dlc%d", index);
+        ENG_CHECK(mount_add(name, M_SAVE_RO, root) == 0);
+        snprintf(path, sizeof path, "%s:/%s", name, index == 1 ? "e0" : "h0");
+        uint64_t handle = 0;
+        int64_t size = -1;
+        ENG_CHECK(open_file(&handle, path, FS_OPEN_READ) == 0);
+        ENG_CHECK(file_size(&size, handle) == 0 && size == 0);
+        if (handle) close_file(handle);
+        ENG_CHECK(open_file(&handle, path, FS_OPEN_WRITE) == FS_R_UNSUPPORTED_OPEN);
+        snprintf(path, sizeof path, "%s:/../escape", name);
+        ENG_CHECK(open_file(&handle, path, FS_OPEN_READ) == FS_R_INVALID_PATH);
+        unmount(name);
+    }
+    ENG_CHECK(romfs_mount("rom") == 0);
+    int type = -1;
+    ENG_CHECK(entry_type(&type, "rom:/Data/StreamingAssets/Audio/GeneratedSoundBanks/Switch") == 0 && type == FS_ENTRY_DIRECTORY);
+    ENG_CHECK(entry_type(&type, "rom:/Data/StreamingAssets/Audio/GeneratedSoundBanks/Switch/") == 0 && type == FS_ENTRY_DIRECTORY);
+    ENG_CHECK(entry_type(&type, "rom:/Data/StreamingAssets/Audio/GeneratedSoundBanks/Switch//") == FS_R_PATH_NOT_FOUND);
+    ENG_CHECK(entry_type(&type, "rom:/Data/StreamingAssets/Audio/GeneratedSoundBanks/Switch/Init.bnk") == 0 && type == FS_ENTRY_FILE);
+    uint64_t directory = 0;
+    int64_t count = 0;
+    DirectoryEntry entries[8];
+    ENG_CHECK(open_directory(&directory, "rom:/", 3) == 0);
+    ENG_CHECK(read_directory(&count, entries, directory, 8) == 0 && count > 0);
+    if (directory) close_directory(directory);
+    ENG_CHECK(open_directory(&directory, "rom:/Data/../../escape", 3) == FS_R_INVALID_PATH);
+    ENG_CHECK(open_directory(&directory, "rom:/does-not-exist", 3) == FS_R_PATH_NOT_FOUND);
+    printf("engage-fs: %s (%d failures)\n", bad ? "FAILED" : "passed", bad);
+#undef ENG_CHECK
+    return bad ? 1 : 0;
+}
+
 // ---- overrides: AAPCS64 thunks. FileHandle, DirectoryHandle, CacheStorageListHandle
 // and ApplicationId are 8-byte structs passed in one register; Uid, ReadOption and WriteOption by reference.
 #define I32(i) ((int32_t)arg_x(c, i))
 #define I64(i) ((int64_t)arg_x(c, i))
 static void ov_open_file(Cpu *c) { ret_x(c, open_file(arg_p(c, 0), arg_p(c, 1), I32(2))); }
+// SDK allocator/cache callbacks are unused by the host filesystem backend.
+static void ov_fs_allocator(Cpu *c) { (void)c; }
+static void ov_fs_cache(Cpu *c) { (void)c; }
+static void ov_is_mounted(Cpu *c) {
+    const char *name = arg_p(c, 0);
+    int mounted = 0;
+    if (name) {
+        char path[40];
+        if (snprintf(path, sizeof path, "%s:", name) < (int)sizeof path) mounted = romfs_owns(path);
+        plat_mutex_lock_shared(&lock);
+        for (int i = 0; i < NMOUNTS; i++)
+            if (mounts[i].kind && !strcmp(mounts[i].name, name)) mounted = 1;
+        plat_mutex_unlock_shared(&lock);
+    }
+    ret_x(c, mounted);
+}
+static void ov_ensure_save(Cpu *c) {
+    ready();
+    ret_x(c, my_uid(arg_p(c, 0)) ? 0 : FS_R_TARGET_NOT_FOUND);
+}
+static void ov_save_exists_current(Cpu *c) { ret_x(c, save_exists(TOTK_APPLICATION_ID, arg_p(c, 0))); }
 static void ov_file_size(Cpu *c) { ret_x(c, file_size(arg_p(c, 0), arg_x(c, 1))); }
 static void ov_close_file(Cpu *c) { close_file(arg_x(c, 0)); }
 static void ov_entry_type(Cpu *c) { ret_x(c, entry_type(arg_p(c, 0), arg_p(c, 1))); }
@@ -1099,6 +1205,18 @@ static void ov_create_directory(Cpu *c) { ret_x(c, create_directory(arg_p(c, 0))
 static void ov_delete_recursive(Cpu *c) { ret_x(c, delete_recursive(arg_p(c, 0))); }
 static void ov_open_directory(Cpu *c) { ret_x(c, open_directory(arg_p(c, 0), arg_p(c, 1), I32(2))); }
 static void ov_read_directory(Cpu *c) { ret_x(c, read_directory(arg_p(c, 0), arg_p(c, 1), arg_x(c, 2), I64(3))); }
+static void ov_directory_count(Cpu *c) {
+    int64_t *out = arg_p(c, 0);
+    uint64_t handle = arg_x(c, 1);
+    if (!out || handle < DIR_BASE || handle >= DIR_BASE + NDIRS || !dirs[handle - DIR_BASE].used) {
+        ret_x(c, FS_R_INVALID_ARGUMENT); return;
+    }
+    Dir *directory = &dirs[handle - DIR_BASE];
+    *out = 0;
+    for (int i = 0; i < directory->n; i++)
+        *out += !!(directory->mode & (directory->e[i].kind == PLAT_FS_DIR ? 1 : 2));
+    ret_x(c, 0);
+}
 static void ov_close_directory(Cpu *c) { close_directory(arg_x(c, 0)); }
 static void ov_mount_save(Cpu *c) { ret_x(c, mount_save(arg_p(c, 0), arg_p(c, 1))); }
 static void ov_mount_save_ro(Cpu *c) { ret_x(c, mount_save_ro(arg_p(c, 0), arg_x(c, 1), arg_p(c, 2))); }
@@ -1154,6 +1272,12 @@ static void ov_set_priority(Cpu *c) { (void)c; }
 #define S_INITIALIZE "_ZN2nn2fs24InitializeForApplicationEv"
 
 HOST_OVERRIDE(S_OPEN_FILE, ov_open_file);
+HOST_OVERRIDE("_ZN2nn2fs12SetAllocatorEPFPvmEPFvS1_mE", ov_fs_allocator);
+HOST_OVERRIDE("_ZN2nn2fs25EnableGlobalFileDataCacheEPvm", ov_fs_cache);
+HOST_OVERRIDE("_ZN2nn2fs9IsMountedEPKc", ov_is_mounted);
+HOST_OVERRIDE("_ZN2nn2fs14EnsureSaveDataERKNS_7account3UidE", ov_ensure_save);
+HOST_OVERRIDE("_ZN2nn2fs18IsSaveDataExistingERKNS_7account3UidE", ov_save_exists_current);
+HOST_OVERRIDE("_ZN2nn2fs8ReadFileENS0_10FileHandleElPvmRKNS0_10ReadOptionE", ov_read_exact);
 HOST_OVERRIDE(S_FILE_SIZE, ov_file_size);
 HOST_OVERRIDE(S_CLOSE_FILE, ov_close_file);
 HOST_OVERRIDE(S_ENTRY_TYPE, ov_entry_type);
@@ -1170,6 +1294,7 @@ HOST_OVERRIDE(S_CREATE_DIRECTORY, ov_create_directory);
 HOST_OVERRIDE(S_DELETE_RECURSIVE, ov_delete_recursive);
 HOST_OVERRIDE(S_OPEN_DIRECTORY, ov_open_directory);
 HOST_OVERRIDE(S_READ_DIRECTORY, ov_read_directory);
+HOST_OVERRIDE("_ZN2nn2fs22GetDirectoryEntryCountEPlNS0_15DirectoryHandleE", ov_directory_count);
 HOST_OVERRIDE(S_CLOSE_DIRECTORY, ov_close_directory);
 HOST_OVERRIDE(S_MOUNT_SAVE, ov_mount_save);
 HOST_OVERRIDE(S_MOUNT_SAVE_RO, ov_mount_save_ro);
@@ -1339,6 +1464,8 @@ static uint64_t probe_romfs(void) {
     CHECK(same, "rom:/, rom:// and rom:/// do not open the same file");
     snprintf(path, sizeof path, "rom:/%.*s", (int)(strrchr(sample, '/') - sample), sample);
     CHECK(RES(S_ENTRY_TYPE, U(&type), U(path)) == 0 && type == FS_ENTRY_DIRECTORY, "a sampled file's folder");
+    strncat(path, "/", sizeof path - strlen(path) - 1);
+    CHECK(RES(S_ENTRY_TYPE, U(&type), U(path)) == 0 && type == FS_ENTRY_DIRECTORY, "a sampled folder with a trailing slash");
     snprintf(path, sizeof path, "rom://../%s", sample);
     CHECK(RES(S_OPEN_FILE, U(&h), U(path), FS_OPEN_READ) == FS_R_PATH_NOT_FOUND, "rom://../<file> opens");
     snprintf(path, sizeof path, "rom:/%s.absent", sample);

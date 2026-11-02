@@ -551,8 +551,10 @@ uint32_t mem_query(uint64_t a, RtMemoryInfo *out) {
         r = (RtMemoryInfo){.base = L.hostfn.base, .size = L.hostfn.size, .state = ST_INACCESSIBLE};
     } else {
         taken_gap(a, &r.base, &r.size);
-        r.state = ST_CODE;
-        r.perm = PERM_RX;
+        // Unity's C++ unwinder walks executable regions backwards to locate MOD0.
+        // Unmapped gaps must stop that walk rather than look like another code region.
+        r.state = RT_ENGAGE ? ST_FREE : ST_CODE;
+        r.perm = RT_ENGAGE ? PERM_NONE : PERM_RX;
     }
     // Moved stacks: the destination is Stack, the source Normal without access; free and normal regions around them
     // are clipped (MNG services.c).

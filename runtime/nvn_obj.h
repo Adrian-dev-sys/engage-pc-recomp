@@ -67,7 +67,7 @@ typedef struct { NVNdevice *dev; samp_par p; } samp_builder_t;                  
 typedef struct { uint32_t magic; samp_par p; } samp_t;                                        FITS(samp_t, NVNsampler);
 _Static_assert(sizeof(samp_par) == 44, "TOTK sampler parameters");
 
-typedef struct { uint32_t magic, nstage; NVNshaderData sd[6]; uint64_t serial; } prog_t;     FITS(prog_t, NVNprogram);   // serial: table key for the back end's resolved result
+typedef struct { uint32_t magic, nstage; NVNshaderData sd[6]; uint64_t serial; void *owned_control; } prog_t;     FITS(prog_t, NVNprogram);   // serial: table key for the back end's resolved result
 
 typedef struct { uint32_t magic, fenced; uint64_t fence; } sync_t;                            FITS(sync_t, NVNsync);
 typedef struct { const pool_t *pool; int64_t off; } ev_builder_t;                             FITS(ev_builder_t, NVNeventBuilder);

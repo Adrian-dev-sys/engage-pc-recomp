@@ -66,3 +66,5 @@ uint64_t ipc_sessions_released(void);
 
 // The guest frame chain of the request being served, for fatal reports from services.
 void ipc_backtrace(void);
+
+void audout_manager_handler(IpcSession *s, const IpcRequest *rq, IpcResponse *rs);

@@ -32,6 +32,17 @@ __pycache__/
 *.bntx
 *.bnsh
 *.webm
+*.bundle
+*.unity3d
+*.assets
+*.resS
+*.ress
+*.resource
+*.wem
+*.bnk
+global-metadata.dat
+unity default resources
+unity_builtin_extra
 
 # Build outputs
 *.exe

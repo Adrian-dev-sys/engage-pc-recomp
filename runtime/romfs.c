@@ -585,7 +585,10 @@ uint32_t romfs_open(uint64_t *out, const char *path, int mode) {
     const char *p = romfs_path_relative(mount_name, path);
     if (!p) return FS_R_PATH_NOT_FOUND;
     uint64_t i = file_index(p);
-    if (i == UINT64_MAX) return FS_R_PATH_NOT_FOUND;
+    if (i == UINT64_MAX) {
+        if (RT_ENGAGE) rt_log("RomFS: missing file %s", path);
+        return FS_R_PATH_NOT_FOUND;
+    }
     uint32_t ov = overlay_slot(i);
     PlatFile *f = NULL;
     if (ov) {
@@ -679,6 +682,11 @@ void romfs_close(uint64_t h) {
 
 uint32_t romfs_entry_type(int *out, const char *path) {
     if (!out) return FS_R_INVALID;
+    if (romfs_owns(path)) {
+        const char *root = strchr(path, ':') + 1;
+        while (*root == '/') root++;
+        if (!*root) { *out = FS_ENTRY_DIRECTORY; return 0; }
+    }
     const char *p = romfs_path_relative(mount_name, path);
     if (!p) return FS_R_PATH_NOT_FOUND;
     if (file_index(p) != UINT64_MAX) {
@@ -686,12 +694,49 @@ uint32_t romfs_entry_type(int *out, const char *path) {
         return 0;
     }
     char dir[4096];
-    if (snprintf(dir, sizeof dir, "%s/", p) >= (int)sizeof dir) return FS_R_INVALID;
+    if (snprintf(dir, sizeof dir, "%s%s", p, p[strlen(p) - 1] == '/' ? "" : "/") >= (int)sizeof dir) return FS_R_INVALID;
     if (folder_exists(dir)) {
         *out = FS_ENTRY_DIRECTORY;
         return 0;
     }
     return FS_R_PATH_NOT_FOUND;
+}
+
+// Sorted index: find the prefix once, then visit only this directory's descendants.
+uint32_t romfs_list(const char *path, int (*cb)(const char *, int, uint64_t, void *), void *ctx) {
+    if (!romfs_owns(path)) return FS_R_PATH_NOT_FOUND;
+    const char *relative = strchr(path, ':') + 1;
+    if (*relative != '/') return FS_R_INVALID_PATH;
+    while (*relative == '/') relative++;
+    if (*relative && !romfs_path_valid_relative(relative)) return FS_R_INVALID_PATH;
+    size_t n = strlen(relative);
+    while (n && relative[n - 1] == '/') n--;
+    char prefix[4096], last[769] = "";
+    if (n + 2 > sizeof prefix) return FS_R_INVALID_PATH;
+    memcpy(prefix, relative, n);
+    if (n) prefix[n++] = '/';
+    prefix[n] = 0;
+    uint64_t lo = 0, hi = file_count;
+    while (lo < hi) {
+        uint64_t mid = lo + (hi - lo) / 2;
+        if (strcmp(entry_name(entry(mid)), prefix) < 0) lo = mid + 1;
+        else hi = mid;
+    }
+    int found = !n;
+    for (uint64_t i = lo; i < file_count; i++) {
+        Entry e = entry(i);
+        const char *name = entry_name(e);
+        if (strncmp(name, prefix, n)) break;
+        found = 1;
+        name += n;
+        const char *slash = strchr(name, '/');
+        size_t length = slash ? (size_t)(slash - name) : strlen(name);
+        if (!length || length >= sizeof last) return FS_R_INVALID_PATH;
+        if (strlen(last) == length && !strncmp(last, name, length)) continue;
+        memcpy(last, name, length); last[length] = 0;
+        if (!cb(last, slash ? PLAT_FS_DIR : PLAT_FS_FILE, slash ? 0 : e.size, ctx)) break;
+    }
+    return found ? 0 : FS_R_PATH_NOT_FOUND;
 }
 
 // ---- overrides
@@ -706,7 +751,7 @@ static void ov_query_cache(Cpu *c) {
 // void nn::fs::InitializeForApplication(): SDK-internal; opens the index instead of the fs service session
 static void ov_initialize(Cpu *c) {
     (void)c;
-    fs_init();
+    if (!RT_ENGAGE) fs_init(); // Engage opens its verified image at MountRom, after module initialization.
 }
 
 HOST_OVERRIDE("_ZN2nn2fs8MountRomEPKcPvm", ov_mount_rom);

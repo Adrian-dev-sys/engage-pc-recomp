@@ -12,6 +12,7 @@
 // is also fixed at init; they are looked up only after the flat table misses.
 #include "dispatch.h"
 #include "host.h"
+#include "kernel.h"
 #include "platform/platform.h"
 
 #include <stdarg.h>
@@ -183,6 +184,7 @@ __attribute__((noinline, noreturn, cold)) static void dispatch_fail(Cpu *c) {
     const char *why = (pc & 3) ? "misaligned address"
                     : module_at(pc) ? "not a function start"
                     : "outside every module, no host function registered";
+    kern_backtrace(c);
     rt_fatal("rt_dispatch: no function at guest pc %s: %s (lr %s)", rt_guest_name(pc, at, sizeof at), why,
              rt_guest_name(c->x[30], lr, sizeof lr));
 }
@@ -215,4 +217,20 @@ void rt_dispatch(Cpu *c) {
 
 RtDispatchStats rt_dispatch_stats(void) {
     return (RtDispatchStats){D.lo, D.lo + D.slots * 4, D.slots, g_table_bytes, g_functions, g_nhost};
+}
+
+// A continuation is validated by its containing lifted function's generated switch.
+void rt_dispatch_resume(Cpu *c) {
+    const RtModule *m = module_at(c->pc);
+    if (!m || !m->count || (c->pc & 3)) rt_fatal("continuation outside guest code: %#llx", (unsigned long long)c->pc);
+    uint64_t lo = 0, hi = m->count;
+    while (lo < hi) {
+        uint64_t mid = lo + (hi - lo) / 2;
+        if (m->addrs[mid] <= c->pc) lo = mid + 1;
+        else hi = mid;
+    }
+    if (!lo) rt_fatal("continuation precedes guest code: %#llx", (unsigned long long)c->pc);
+    c->resume_pc = c->pc;
+    m->fns[lo - 1](c);
+    if (c->resume_pc) rt_fatal("guest function lacks continuation support");
 }

@@ -411,6 +411,8 @@ NVN_API(nvnProgramInitialize) {
 static void prog_release(prog_t *o) {
     if (o->serial) gfx_backend()->program_release(o);
     o->serial = 0;
+    free(o->owned_control);
+    o->owned_control = NULL;
 }
 // void nvnProgramFinalize(NVNprogram *p)
 NVN_API(nvnProgramFinalize) {
@@ -423,9 +425,17 @@ static int prog_set_shaders(prog_t *o, int n, const NVNshaderData *sd) {
         rt_log("nvn: ProgramSetShaders with %d stages at %p", n, (const void *)sd);
         return 0;
     }
+    // Unity releases control sections when this call returns; deferred translation still reads them.
+    uint8_t *owned = RT_ENGAGE && n ? malloc((size_t)n * 0x880) : NULL;
+    if (RT_ENGAGE && n && !owned) return 0;
+    if (owned) for (int i = 0; i < n; i++)
+        if (sd[i].control) memcpy(owned + (size_t)i * 0x880, sd[i].control, 0x880);
     prog_release(o);
+    o->owned_control = owned;
     o->nstage = (uint32_t)n;
     if (n) memcpy(o->sd, sd, (size_t)n * sizeof *sd);
+    if (owned) for (int i = 0; i < n; i++)
+        if (sd[i].control) o->sd[i].control = owned + (size_t)i * 0x880;
     o->serial = nvn_new_serial();
     NVN_LOG("ProgramSetShaders %p n=%d data0=%#llx", (void *)o, n, n ? (unsigned long long)sd[0].data : 0ull);
     return 1;

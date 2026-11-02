@@ -1,69 +1,41 @@
-# TotK Recomp
+# Engage PC Recomp
 
-**TotK Recomp** is a static recompilation of *The Legend of Zelda: Tears of the Kingdom* (Nintendo Switch, 2023) into a native Windows x86-64 application ([docs/architecture.md](docs/architecture.md)).
+Experimental native Windows x86-64 recompilation of **Fire Emblem Engage 2.0.0**, built on [TotK Recomp](https://github.com/valentderah/totk-pc-recomp).
 
-> [!IMPORTANT]
-> **No game files are included.** You need your own legally obtained copy of *Tears of the Kingdom*, dumped from your own console: the base game and the 1.2.1 or 1.4.3 update. Instructions for obtaining those files will not be provided.
->
-> The game is built from your files on your machine, so the result contains the game. It is for your own use. Do not share it.
+**Source preview. There is no supported Engage installer release yet.** The inherited TotK installer does not install Engage. Do not use TotK setup packages or game patches for this project.
 
-## Status
+## Game files stay on your computer
 
-Early development. The game is playable on Windows; visual bugs and crashes are still expected.
+This repository contains the port's source and tools, not the game. Supply your own base game, update 2.0.0, keys and supported DLC dumps. Build locally. Do not upload game containers, keys, firmware, generated game code, a built `engage.exe`, extracted icons, shader caches or save files to this repository or its issues. A locally compiled game executable contains game code and is not a redistributable release asset.
 
-Report problems as issues, following [CONTRIBUTING.md](CONTRIBUTING.md).
+## Current status
 
-## Features
+- Opening movie, title screen and character preview render.
+- A player completed the first battle, including attack cutscenes.
+- Audio playback works through the Windows output device.
+- Keyboard/gamepad input and the F1 settings menu work in the tested build.
+- The two supported DLC packages are extracted and mounted; DLC gameplay is unverified.
 
-- Native code, not emulation
-- Game updates 1.2.1 and 1.4.3, with saves that carry over between them
-- 60 fps by default; up to 144 fps or the monitor's refresh rate (experimental)
-- Custom resolutions (1080p, 2k...), supersampling and AMD FSR 1 upscaling
-- 16:10 (Steam Deck, handhelds), 21:9 and 32:9 (ultrawide) game resolutions, with the camera and the interface in that shape
-- In-game settings menu (F1) and performance overlay (F10)
-- Keyboard, mouse and gamepad with remapping, rumble and gyro
-- Xbox button prompts: a layout that keeps the Switch button positions and shows the Xbox labels
-- Shaders prepared at install instead of during play
+Known limits: save/load, the post-battle transition and long-session stability still need testing. Rendering differences remain under investigation, including the unit-information panel's color in different states. Vulkan validation coverage is not established. The tested configuration disables the Vulkan recorder.
 
-## Planned
+The current evidence is from a Windows 11 machine with an NVIDIA RTX 4060. This is not a claim of compatibility with every GPU or of full-game completion. Linux, Steam Deck, performance patches and inherited TotK features are not verified for Engage.
 
-- Linux and the Steam Deck
-- Mods made for emulators: unpack a mod into a `mods` folder
-- VRR
+## Build and run
 
-## Installing
+Follow [the Engage build guide](docs/building-engage.md). It requires developer tools and a local build; there is no ready-to-play executable to download.
 
-Requirements: Windows 10 or later, an x86-64 CPU with AVX2, a GPU with Vulkan 1.3 and `VK_EXT_external_memory_host`, about 36 GiB free during setup (20 GiB after).
+Launch a completed local build with `Run-Engage.cmd`. Settings use `engage.ini`; logs use `logs/engage.log` beside the executable. Your profile stays in the ignored `build/profile-engage` directory.
 
-1. Download `TotK-Setup-<version>-windows.zip` from [Releases](../../releases/latest) and unpack it.
-2. Start `TotK-Setup.exe`. If SmartScreen warns about an unsigned app, choose *More info*, then *Run anyway*.
-3. Pick your game files, the language and an install folder, and press *Start*. The setup builds the game once.
-4. Play `totk.exe` from the install folder.
+## Contributing
 
-To update, run a newer `TotK-Setup.exe` on the same folder; saves and settings are kept. Settings are in the in-game menu and in `totk.ini` ([totk.ini.example](totk.ini.example) lists every key). Controls: [docs/controls.md](docs/controls.md).
+Read [CONTRIBUTING.md](CONTRIBUTING.md). Report reproducible bugs with the port/game version, GPU/driver and the exact scene. Review logs for personal paths before attaching them. Never attach game data, keys, firmware, saves or locally compiled game executables.
 
-## Credits
+[Porting notes and observed results](docs/engage-port.md) distinguish tested behavior from open work. [Release policy](docs/releasing-engage.md) describes what may be published and what must be verified before an installer release.
 
-TotK Recomp builds on the projects below. What was taken from each, with its license, is listed in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+## Credits and license
 
-- [LAS Recomp](https://github.com/peiikai/LASRecomp)
-- [MacNativeGames](https://github.com/ly05010419/MacNativeGames)
-- [d2r-mobile](https://github.com/jhaizhou-ops/d2r-mobile) and [nxnative](https://github.com/seedds/nxnative)
-- [SavageWindRecomp](https://github.com/Revivedx/SavageWindRecomp)
-- [Ryujinx](https://github.com/Ryujinx/Ryujinx)
-- [deko3d](https://github.com/devkitPro/deko3d)
-- [hactool](https://github.com/SciresM/hactool)
-- [SDL 3](https://libsdl.org), [Dear ImGui](https://github.com/ocornut/imgui), [AMD FSR 1](https://github.com/GPUOpen-Effects/FidelityFX-FSR), [Vulkan Memory Allocator](https://github.com/GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator), [libopus](https://opus-codec.org), [libvpx](https://chromium.googlesource.com/webm/libvpx), [Zstandard](https://github.com/facebook/zstd)
-- [Switchbrew](https://switchbrew.org) and the Switch homebrew community
+This is a fork of **TotK Recomp** by Valiantsin Dzerakh, based on commit `f469c5a7745502357fc1664c04e02522fe92c42a`. The original project's MIT license and contributor notices are preserved. See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) for the upstream components and their licenses, including LAS Recomp, MacNativeGames, SavageWindRecomp, nxnative, Ryujinx, SDL, Dear ImGui, libopus, libvpx and Zstandard.
 
-## License
+The port's code is under the [MIT License](LICENSE); third-party components retain their own licenses. This license does not cover Nintendo game content. Engage PC Recomp is an independent fan project, not affiliated with or endorsed by Nintendo or Intelligent Systems. Fire Emblem and Nintendo Switch are their respective owners' trademarks.
 
-The project's own code is under the [MIT License](LICENSE); third-party code keeps its own license ([THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)). The license grants nothing for Nintendo's game.
-
-TotK Recomp is an independent, non-commercial fan project, not affiliated with or endorsed by Nintendo. *The Legend of Zelda*, *Tears of the Kingdom* and *Nintendo Switch* are trademarks of Nintendo.
-
-## Building from source
-
-[docs/building.md](docs/building.md) lists the toolchain and the steps. Everything the build writes stays under `build\` and `generated\`, which git ignores; run `tools/check_content.py` before a commit. Testers: [docs/tester-guide.md](docs/tester-guide.md).
-
-Most of the code and documentation is written by AI coding agents (Claude Code) under the maintainer's direction; the maintainer plays every build and decides what is merged. [AGENTS.md](AGENTS.md) holds the rules they work under.
+Inherited TotK documentation is retained for engine history and attribution in [docs/upstream-readme.md](docs/upstream-readme.md); its installation and game-specific claims do not apply to Engage.

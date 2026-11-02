@@ -13,13 +13,13 @@ body:
     attributes:
       label: Existing issues
       options:
-        - label: I read the pinned issues and [searched open and closed issues](https://github.com/valentderah/totk-pc-recomp/issues?q=is%3Aissue) for this glitch.
+        - label: I read the pinned issues and [searched open and closed issues](https://github.com/veneito/engage-pc-recomp/issues?q=is%3Aissue) for this glitch.
           required: true
   - type: input
     id: version
     attributes:
       label: Version
-      description: The title line of the settings menu (F1), for example "TotK Recomp 0.1.0, game 1.4.3".
+      description: The title line of the settings menu (F1), for example "Engage PC Recomp 0.1.0, game 2.0.0".
     validations:
       required: true
   - type: input
@@ -56,4 +56,4 @@ body:
     id: log
     attributes:
       label: Log
-      description: Attach logs\totk.log from the folder of totk.exe.
+      description: Attach logs\engage.log from the folder of engage.exe.

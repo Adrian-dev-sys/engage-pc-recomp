@@ -472,6 +472,14 @@ NVN_API(nvnQueueFenceSync) {
     s->fence = nvn_fence_last();
 }
 // NVNsyncWaitResult nvnSyncWait(const NVNsync *s, uint64_t timeout_ns): a sync never fenced reports a timeout at once;
+// All guest queues submit to the same ordered backend queue. Earlier submitted fences
+// and the already-satisfied acquire fence therefore need no additional GPU wait.
+NVN_API(nvnQueueWaitSync) {
+    const sync_t *s = arg_p(c, 1);
+    ret_x(c, s && s->magic == SYNC_MAGIC && s->fenced && s->fence <= nvn_fence_last());
+}
+
+// NVNsyncWaitResult nvnSyncWait(const NVNsync *s, uint64_t timeout_ns): a sync never fenced reports a timeout at once;
 // a fenced one is released only after the back end completed that fence value
 NVN_API(nvnSyncWait) {
     const sync_t *s = arg_p(c, 0);

@@ -679,13 +679,14 @@ static int handle_slot(int kind, int cbuf_slot, int handle, int separate) {
 static void add_res(GfxShader *s, int kind, const char *o, const char *e) {
     GfxShaderRes *r = &s->res[kind][s->nres[kind]++];
     r->set = 0;
+    r->sampler_slot = -1;
     r->binding = (uint16_t)json_int(o, e, "binding", 0);
     if (kind == GFX_RES_UBO || kind == GFX_RES_SSBO) {
         r->slot = (int16_t)json_int(o, e, "slot", -1);
         r->count = 1;
         if (kind == GFX_RES_SSBO) {
             r->cbuf_slot = (int8_t)json_int(o, e, "cb_slot", -1);
-            r->handle = (uint16_t)json_int(o, e, "cb_offset", 0);
+            r->handle = (uint32_t)json_int(o, e, "cb_offset", 0);
             r->flags = (uint8_t)json_int(o, e, "flags", 0);
         }
         return;
@@ -698,10 +699,29 @@ static void add_res(GfxShader *s, int kind, const char *o, const char *e) {
     r->flags = (uint8_t)json_int(o, e, "flags", 0);
     r->cbuf_slot = (int8_t)json_int(o, e, "cbuf_slot", -1);
     int handle = (int)json_int(o, e, "handle", 0);
-    r->handle = (uint16_t)handle;
+    r->handle = (uint32_t)handle;
     r->count = (uint16_t)json_int(o, e, "array", 1);
     r->separate = sep && *sep == 't';
-    r->slot = (int16_t)handle_slot(kind, r->cbuf_slot, handle, r->separate);
+    // SPIR-V's separate-descriptor flag is distinct from NVN's packed texture/sampler handle.
+    int split_handle = kind == GFX_RES_TEX && ((uint32_t)handle >> 28) == 1;
+    r->slot = (int16_t)handle_slot(kind, r->cbuf_slot, handle, r->separate || split_handle);
+    if (split_handle) {
+        uint32_t slots = (uint32_t)json_int(o, e, "cbuf_slot", 0xffffffffu);
+        int second_buffer = (slots >> 16) ? (int)(slots >> 16) - 1 : r->cbuf_slot;
+        uint32_t first = ((uint32_t)handle & 0x3fff) * 4;
+        uint32_t second = ((uint32_t)handle >> 14 & 0x3fff) * 4;
+        int sampler_buffer = second_buffer;
+        uint32_t sampler_bytes = second;
+        // OR is commutative: bindless elimination may put the sampler offset first.
+        if (r->slot < 0 && (second_buffer == 2 || slots == 0xffffffffu)) {
+            r->slot = (int16_t)handle_slot(kind, 2, (int)(second / 4), 1);
+            sampler_bytes = first;
+            sampler_buffer = r->cbuf_slot;
+        }
+        if ((sampler_buffer == 2 || slots == 0xffffffffu) && sampler_bytes >= 0x568 &&
+            sampler_bytes < 0x968 && !(sampler_bytes & 7))
+            r->sampler_slot = (int16_t)((sampler_bytes - 0x568) / 8);
+    }
 }
 
 // SPIR-V opcodes and enumerants used below (SPIR-V 1.6 specification, section 3).
@@ -2040,4 +2060,25 @@ size_t gfx_shader_warm_list(GfxWarmEnt **out) {
     rt_log("gfx_shader: warm list: %zu variants (%zu met in play, %zu prepared)", n, na, np);
     *out = e;
     return n;
+}
+
+
+int gfx_shader_reflection_probe(void) {
+    GfxShaderRes resource = {0};
+    GfxShader shader = {0}; shader.res[GFX_RES_TEX] = &resource;
+    const char *json = "{\"binding\":2,\"type\":3,\"cbuf_slot\":196610,\"handle\":274104410,\"separate\":false}";
+    add_res(&shader, GFX_RES_TEX, json, json + strlen(json));
+    if (resource.slot != 0 || resource.sampler_slot != 0 || resource.handle != 274104410u || resource.separate) return 0;
+    shader.nres[GFX_RES_TEX] = 0;
+    json = "{\"binding\":2,\"type\":3,\"cbuf_slot\":196610,\"handle\":269910362,\"separate\":false}";
+    add_res(&shader, GFX_RES_TEX, json, json + strlen(json));
+    if (resource.slot != 0 || resource.sampler_slot != 0 || resource.separate) return 0;
+    shader.nres[GFX_RES_TEX] = 0;
+    json = "{\"binding\":2,\"type\":3,\"cbuf_slot\":196610,\"handle\":270041440,\"separate\":false}";
+    add_res(&shader, GFX_RES_TEX, json, json + strlen(json));
+    if (resource.slot != 4 || resource.sampler_slot != 3 || resource.separate) return 0;
+    shader.nres[GFX_RES_TEX] = 0;
+    json = "{\"binding\":2,\"type\":3,\"cbuf_slot\":2,\"handle\":8,\"separate\":false}";
+    add_res(&shader, GFX_RES_TEX, json, json + strlen(json));
+    return resource.slot == 0 && resource.sampler_slot == -1 && resource.handle == 8 && !resource.separate;
 }

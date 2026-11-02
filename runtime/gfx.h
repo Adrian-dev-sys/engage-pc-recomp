@@ -85,13 +85,15 @@ typedef struct {
     uint8_t format;             // IMG: declared format as a GfxShaderAnswers.img_format code, 0 unknown
     uint8_t flags;              // SSBO: 1 written; TEX/IMG: Ryujinx TextureUsageFlags (4 image store, 8 coherent)
     int8_t cbuf_slot;           // TEX/IMG: constant buffer of the handle (-1: bound texture buffer); SSBO: of its address
-    uint16_t handle;            // TEX/IMG: raw handle (word offset; separate: texture | sampler << 14); SSBO: address offset
+    uint32_t handle;            // TEX/IMG: raw handle (word offset; separate: texture | sampler << 14); SSBO: address offset
+    int16_t sampler_slot;       // NVN separate sampler binding, -1 for combined/direct handles
     uint16_t count;             // descriptors (array length)
     uint8_t separate;           // TEX: texture and sampler handles are separate
 } GfxShaderRes;
 typedef struct { uint8_t type, comps, packed; } GfxShaderIo;   // GFX_TYPE_*, components, 1 with a Component decoration
 int gfx_shader_stage(const GfxShader *s);                   // GFX_STAGE_VS, GFX_STAGE_FS or GFX_STAGE_CS
 int gfx_shader_resources(const GfxShader *s, int kind, const GfxShaderRes **res);   // count of GFX_RES_* kind; array in *res
+int gfx_shader_reflection_probe(void);
 uint32_t gfx_shader_slot_mask(const GfxShader *s);                    // texture/image slots whose type its translation read
 uint32_t gfx_shader_inputs(const GfxShader *s, GfxShaderIo io[32]);    // Input Locations (VS attributes, FS varyings) as a mask
 uint32_t gfx_shader_outputs(const GfxShader *s, GfxShaderIo io[32]);   // Output Locations (VS varyings, FS colour targets)

@@ -91,6 +91,7 @@ static int bigger(void) {
 }
 
 uint64_t res_heap_extra_kib(void) {
+    if (RT_ENGAGE) return 0;
     if (!bigger()) return 0;
     double grow = fmax(0.0, (double)R.ow * R.oh / (BASE_W * BASE_H) - 1.0) +
                   fmax(0.0, (double)R.sw * R.sh / (SCENE_W * SCENE_H) - 1.0);

@@ -170,7 +170,7 @@ static void add(char *key, char *value, int line) {
     size_t vl = strlen(value);
     if (vl >= 2 && value[0] == '"' && value[vl - 1] == '"') value[vl - 1] = 0, value++;
     if (!*key) return;
-    if (!is_known(key)) rt_log("cfg: totk.ini line %d: unknown key '%s'", line, key);
+    if (!is_known(key)) rt_log("cfg: %s line %d: unknown key '%s'", RT_ENGAGE ? "engage.ini" : "totk.ini", line, key);
     if (!*value) return;   // "key =" leaves the setting at its default
     for (int i = 0; i < n_entries; i++)
         if (!strcmp(entries[i].key, key)) {   // a repeated key: the later line wins
@@ -195,7 +195,7 @@ int cfg_load(const char *path) {
         char *s = trim(p);
         char *eq = strchr(s, '=');
         if (*s && *s != '#' && *s != ';' && *s != '[') {
-            if (!eq) rt_log("cfg: totk.ini line %d: no '=' in '%s'", line, s);
+            if (!eq) rt_log("cfg: %s line %d: no '=' in '%s'", RT_ENGAGE ? "engage.ini" : "totk.ini", line, s);
             else {
                 *eq = 0;
                 add(trim(s), trim(eq + 1), line);
@@ -615,7 +615,7 @@ static int find_ini(void) {
     char *cut = plat_last_sep(path);
     if (!cut) cut = strrchr(path, '/');
     if (!cut || cut + 10 >= path + sizeof path) return 0;
-    strcpy(cut + 1, "totk.ini");
+    strcpy(cut + 1, RT_ENGAGE ? "engage.ini" : "totk.ini");
     snprintf(ini_path, sizeof ini_path, "%s", path);
     return 1;
 }

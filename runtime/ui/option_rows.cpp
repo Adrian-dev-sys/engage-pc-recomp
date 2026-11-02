@@ -21,6 +21,7 @@ extern "C" {
 #include "ui_text.h"
 // host.h pulls in cpu.h, which is C only: the one function needed from it, as declared there.
 void rt_log(const char *fmt, ...) __attribute__((format(printf, 1, 2)));
+extern const int rt_game_id;
 }
 
 static const ImU32 kGold = IM_COL32(236, 194, 84, 255);
@@ -46,7 +47,7 @@ static void desc_set(Desc &d, UiTextId desc, const char *key, const CfgMeta *m, 
     if (disabled)
         snprintf(d.text + n, sizeof d.text - n, "\n\n%s", disabled);
     else if (cfg_from_env(key))
-        snprintf(d.text + n, sizeof d.text - n, "\n\n%s %s", menu_text(UI_MENU_SET_BY_ENV), key);
+        snprintf(d.text + n, sizeof d.text - n, "\n\n%s %s", menu_text(UI_MENU_SET_BY_ENV), rt_game_id == 1 ? "" : key);
     else if (m && !m->live)
         snprintf(d.text + n, sizeof d.text - n, "\n\n%s", menu_text(UI_MENU_AFTER_RESTART));
 }

@@ -345,12 +345,13 @@ def main():
     ap.add_argument('--show', type=int, default=20)
     ap.add_argument('--patches', type=Path, help='patch table whose spin waits are emitted with their gates')
     ap.add_argument('--cflags', default='-march=x86-64-v3' if platform.machine().lower() in ('amd64', 'x86_64') else '')
+    ap.add_argument('--continuations', action='store_true', help='test the opt-in continuation emitter')
     args = ap.parse_args()
     r = random.Random(args.seed)
     t0 = time.time()
     want = args.modules.split(',')
 
-    work = ROOT / 'build' / 'test' / 'func'
+    work = ROOT / 'build' / 'test' / ('func-continuations' if args.continuations else 'func')
     work.mkdir(parents=True, exist_ok=True)
     images, emitted, tags = [], [], []
     mods = layout(args.exefs)
@@ -363,6 +364,9 @@ def main():
         img.write_bytes(mod.image)
         images.append((base, img, mod.image))
         picks, emitter = pick_functions(name, mod, args.functions, r, table.spins_for(name, base))
+        if args.continuations:
+            emitter.continuations = True
+            emitter.landing_pads = sorted(gen.eh.landing_pads(mod))
         for entry, end, t in picks:
             emitted.append((name, entry, end, emitter))
             tags.append(t)
@@ -383,7 +387,7 @@ def main():
         for _ in range(args.cases):
             case = make_case(r)
             want_state = runner.run(entry, end, case, args.steps)
-            if want_state is None:
+            if want_state is None or (args.continuations and want_state[1] != case[2]):
                 skipped += 1
                 continue
             fpcr, x, sp, nzcv, v = case

@@ -64,6 +64,9 @@ struct RtThread {
     int prio, core;
     uint64_t mask;
     int started, exited, closed, cancel, is_main;
+    int pause_requested, paused;
+    Cpu pause_cpu;
+    PlatCond pause_cv;
     PlatCond cv;
     // current wait
     int wkind, woke;
@@ -351,7 +354,8 @@ static void ap_init(void) {
     if (g_ap >= 0) return;
     const char *e = cfg_value("TOTK_ASYNC_PREEMPT");
     g_ap = strcmp(e, "0") != 0;
-    g_ap_int = g_ap && strcmp(e, "2") != 0;
+    // Engage's GC snapshots Cpu at cooperative boundaries, where lifted locals are published.
+    g_ap_int = g_ap && strcmp(e, "2") != 0 && !RT_ENGAGE;
     if (g_ap) {
         RtModule m[16];
         int n = rt_linked_modules(m, 16);
@@ -842,6 +846,7 @@ static void core_grant(int c) {
     RtThread *b = NULL, **bp = NULL;
     int bpri = 0;
     for (RtThread **p = &g_core_wait; *p; p = &(*p)->cnext) {
+        if ((*p)->pause_requested) continue;
         if (!core_allowed(*p, c)) continue;
         int pr = prio_of(*p);
         if (!b || pr < bpri || (pr == bpri && (*p)->cseq < b->cseq)) {
@@ -935,7 +940,20 @@ static void core_kick(void) {
     }
 }
 
+static void pause_wait(RtThread *t) {
+    if (!t->pause_requested) return;
+    core_put(t);
+    if (!t->paused) {
+        t->pause_cpu = *t->cur;
+        t->paused = 1;
+        plat_cond_broadcast(&t->pause_cv);
+    }
+    while (t->pause_requested) plat_cond_wait(&t->pause_cv, &G);
+    t->paused = 0;
+}
+
 static void core_take(RtThread *t) {
+    pause_wait(t);
     if (t->cur_core >= 0) return;
     if (!cores_enabled()) {
         acct(t, S_RUN);
@@ -973,6 +991,11 @@ static void core_take(RtThread *t) {
     }
     int sampled = 0;
     while (t->cur_core < 0) {
+        if (t->pause_requested) {
+            pause_wait(t);
+            for (int i = 0; i < NCORE; i++) if (!g_core_owner[i]) core_grant(i);
+            if (t->cur_core >= 0) break;
+        }
         uint32_t ms = 0;   // 0: until signalled
         if (g_ap_int && ap_try(t) != AP_NONE) ms = 1;   // the owner keeps its core: again in a millisecond
         int sample = g_diag > 0 && !sampled && (t->dg_cls == DG_GAME || t->dg_cls == DG_HOST);
@@ -983,6 +1006,11 @@ static void core_take(RtThread *t) {
             sampled = 1;
             dg_sample(t);
         }
+    }
+    if (t->pause_requested) {
+        core_put(t);
+        core_take(t);
+        return;
     }
     if (g_diag > 0) dg_done(t);
     if (t->grant_at) {
@@ -1078,6 +1106,12 @@ void kern_checkpoint(void) {
     RtThread *t = tcur;
     if (!t || !__atomic_load_n(&t->preempt, __ATOMIC_RELAXED)) return;
     lock();
+    if (t->pause_requested) {
+        core_put(t);
+        core_take(t);
+        unlock();
+        return;
+    }
     if (g_diag > 0 && t->cur) {
         t->dg_pc = t->cur->pc;
         t->dg_lr = t->cur->x[30];
@@ -1382,6 +1416,7 @@ static RtThread *thr_new(int prio, int core, uint64_t mask) {
     if (!t || !c) rt_fatal("kernel: thread allocation");
     memset(c, 0, sizeof *c);
     plat_cond_init(&t->cv);
+    plat_cond_init(&t->pause_cv);
     t->prio = prio;
     t->core = core;
     t->mask = mask;
@@ -1761,6 +1796,60 @@ int kern_svc(Cpu *c, uint32_t imm) {
         *flag = 0;
         ap_sync(t);
         x[0] = R_OK;
+        return 1;
+    }
+    case 0x32: {   // SetThreadActivity: stop only at published Cpu boundaries, never in arbitrary lifted code.
+        RtThread *me = cur(imm);
+        int activity = (int)x[1];
+        lock();
+        RtThread *t = h_get((uint32_t)x[0], O_THREAD);
+        uint32_t result = !t ? R_BAD_HANDLE : t == me || t->exited ? R_BAD_STATE : activity < 0 || activity > 1 ? R_INVALID_ENUM : R_OK;
+        if (!result && activity) {
+            t->pause_requested = 1;
+            __atomic_store_n(&t->preempt, 1, __ATOMIC_RELEASE);
+            if (t->cur_core < 0 || !t->started) {
+                t->pause_cpu = *t->cur;
+                t->paused = 1;
+            }
+            core_put(me);
+            uint64_t deadline = kern_now_ns() + 1000000000ull;
+            while (!t->paused && !t->exited && kern_now_ns() < deadline)
+                plat_cond_wait_ms(&t->pause_cv, &G, 1);
+            if (!t->paused || t->exited) {
+                t->pause_requested = t->paused = 0;
+                plat_cond_broadcast(&t->pause_cv);
+                result = R_BAD_STATE;
+            }
+            core_take(me);
+        } else if (!result) {
+            t->pause_requested = t->paused = 0;
+            plat_cond_broadcast(&t->pause_cv);
+            for (int i = 0; i < NCORE; i++) if (!g_core_owner[i]) core_grant(i);
+        }
+        unlock();
+        x[0] = result;
+        return 1;
+    }
+    case 0x33: {   // GetThreadContext3: Horizon's 0x320-byte ARM64 context, for a stopped thread only.
+        typedef struct { uint64_t x[29], fp, lr, sp, pc; uint32_t pstate, pad;
+                         __uint128_t v[32]; uint32_t fpcr, fpsr; uint64_t tpidr; } ThreadContext;
+        _Static_assert(sizeof(ThreadContext) == 0x320, "Horizon ThreadContext layout");
+        ThreadContext *out = (void *)(uintptr_t)x[0];
+        lock();
+        RtThread *t = h_get((uint32_t)x[1], O_THREAD);
+        uint32_t result = !t ? R_BAD_HANDLE : !t->paused || !out ? R_BAD_STATE : R_OK;
+        if (!result) {
+            const Cpu *saved = &t->pause_cpu;
+            mem_thaw((uintptr_t)out, sizeof *out);
+            memset(out, 0, sizeof *out);
+            memcpy(out->x, saved->x, sizeof out->x);
+            out->fp = saved->x[29]; out->lr = saved->x[30]; out->sp = saved->sp; out->pc = saved->pc;
+            out->pstate = (uint32_t)saved->nzcv;
+            memcpy(out->v, saved->v, sizeof out->v);
+            out->fpcr = (uint32_t)saved->fpcr; out->fpsr = (uint32_t)saved->fpsr; out->tpidr = saved->tpidr;
+        }
+        unlock();
+        x[0] = result;
         return 1;
     }
     case 0x25: {   // GetThreadId(w1 handle -> x1)

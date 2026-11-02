@@ -5,6 +5,7 @@
 // Every registered function dispatches through hostfn_entry, which counts the call, traces the first one
 // (TOTK_TRACE=host) and tail-calls the real function. The registry is fixed by hostfn_seal, which builds the dispatch
 // table; guest threads start after that, so lookups need no lock.
+#include <setjmp.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -198,6 +199,30 @@ void hostfn_report(void) {
     for (int i = 0; i < n; i++) rt_log("  %10llu  %s", (unsigned long long)order[i]->calls, order[i]->name);
 }
 
+typedef struct CallFrame {
+    jmp_buf jump;
+    struct CallFrame *previous;
+    uint64_t sp;
+    int host_depth;
+} CallFrame;
+
+void rt_guest_resume(Cpu *c, uint64_t target) {
+    CallFrame *frame = c->call_frame;
+    while (frame && frame->sp < c->sp) frame = frame->previous;
+    if (!frame) rt_fatal("nonlocal guest return without a host boundary");
+    static unsigned resumes;
+    if (__atomic_fetch_add(&resumes, 1, __ATOMIC_RELAXED) < 8) {
+        char at[128];
+        rt_log("guest continuation: %s, SP %#llx", ldr_describe(target, at, sizeof at), (unsigned long long)c->sp);
+    }
+    c->call_frame = frame;
+    c->pc = target;
+    c->resume_pc = 0;
+    if (c->thread) __atomic_store_n(kern_host_depth(c->thread), frame->host_depth, __ATOMIC_RELAXED);
+    rt_fpcr_sync(c);
+    longjmp(frame->jump, 1);
+}
+
 uint64_t rt_call(Cpu *c, uint64_t fn, int n, ...) {
     if (n < 0 || n > 8) rt_fatal("rt_call: %d arguments", n);
     if (!sealed) hostfn_seal();
@@ -209,7 +234,23 @@ uint64_t rt_call(Cpu *c, uint64_t fn, int n, ...) {
     c->x[30] = RT_RET_HOST;
     c->pc = fn;
     rt_fpcr_sync(c);   // guest code may start here on a host thread or fiber that has not run it
-    rt_dispatch(c);
+    if (!RT_ENGAGE) {
+        rt_dispatch(c);
+        c->x[30] = lr;
+        c->pc = pc;
+        return c->x[0];
+    }
+    CallFrame frame = {.previous = c->call_frame, .sp = c->sp,
+                       .host_depth = c->thread ? *kern_host_depth(c->thread) : 0};
+    c->call_frame = &frame;
+    if (!setjmp(frame.jump)) rt_dispatch(c);
+    else {
+        while (c->pc != RT_RET_HOST) {
+            rt_dispatch_resume(c);
+            c->pc = c->x[30];
+        }
+    }
+    c->call_frame = frame.previous;
     c->x[30] = lr;
     c->pc = pc;
     return c->x[0];

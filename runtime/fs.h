@@ -43,6 +43,10 @@ int romfs_xbox_prompts_active(void);                       // and was loaded (pa
 const char *romfs_overlay(size_t k, const char **file, uint64_t *size, int *is_added);   // RomFS path of overlay k
 void fs_trace(const char *what, const char *path);         // TOTK_TRACE=fs: one line per open
 
+uint32_t romfs_list(const char *path, int (*cb)(const char *, int, uint64_t, void *), void *ctx);
+int fs_aoc_indices(int *out, int offset, int count);
+int probe_engage_fs(void);
+
 // ---- fs_host.c
 void fs_host_set_profile(const char *dir);                 // profile directory; before the first storage mount only
                                                            // (default rt_config()->profile)

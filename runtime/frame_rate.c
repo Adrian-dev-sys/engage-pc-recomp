@@ -167,6 +167,7 @@ static uint64_t read_ptr(uint64_t a) {
 // read it, and one of them reproduces this walk (the 14-component check, component 13, the 0x70 stride and the name
 // compare) instruction for instruction.
 static int player_pos(float xyz[3]) {
+    if (RT_ENGAGE) return 0;
     uint64_t module = read_ptr(MOD_MAIN_BASE + (RT_V143 ? 0x3add238 : RT_V111 ? 0x4630a68 : 0x4728538)),
              scene = module ? read_ptr(module + 0x1e8) : 0;
     int32_t count = 0;
@@ -232,6 +233,10 @@ uint64_t frame_step_ticks(void) { return atomic_load_explicit(&game_us, memory_o
 static void world_clock(double dt, double step) {
     presents++;
     int64_t w = atomic_load_explicit(&world_us, memory_order_relaxed);
+    if (w < 0 && RT_ENGAGE) {
+        atomic_store_explicit(&world_us, 0, memory_order_relaxed);
+        return;
+    }
     if (w < 0) {
         float p[3];
         if (!player_pos(p) || fabsf(p[0]) + fabsf(p[2]) < 1.0f) return;   // a few guest reads, until the load ends

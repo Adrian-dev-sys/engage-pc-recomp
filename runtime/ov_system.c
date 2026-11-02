@@ -190,6 +190,34 @@ void oe_push_message(uint32_t message) {
     plat_mutex_unlock(&lock);
 }
 
+// The host owns process shutdown; guest sections must not enter an uninitialized Horizon applet client.
+static uint32_t exit_sections;
+static void ov_enter_exit_section(Cpu *c) {
+    (void)c;
+    plat_mutex_lock(&lock);
+    if (exit_sections == UINT32_MAX) rt_fatal("oe: exit handling nesting overflow");
+    exit_sections++;
+    plat_mutex_unlock(&lock);
+}
+static void ov_leave_exit_section(Cpu *c) {
+    (void)c;
+    plat_mutex_lock(&lock);
+    if (!exit_sections) rt_fatal("oe: exit handling leave without enter");
+    exit_sections--;
+    plat_mutex_unlock(&lock);
+}
+
+int ov_probe_exit_sections(void) {
+    Cpu c = {0};
+    GuestFn enter = hostfn_override("_ZN2nn2oe31EnterExitRequestHandlingSectionEv");
+    GuestFn leave = hostfn_override("_ZN2nn2oe31LeaveExitRequestHandlingSectionEv");
+    if (!enter || !leave || exit_sections) return 0;
+    for (int i = 0; i < 8; i++) enter(&c);
+    if (exit_sections != 8) return 0;
+    for (int i = 0; i < 8; i++) leave(&c);
+    return exit_sections == 0;
+}
+
 // void GetExpectedVolumeBalance(float *left, float *right)
 static void ov_get_balance(Cpu *c) {
     float *l = arg_p(c, 0), *r = arg_p(c, 1);
@@ -297,15 +325,20 @@ static void ov_show_error(Cpu *c) {
 
 // ==== SDK-internal initialisation (services.c)
 static void ov_diag_startup(Cpu *c) { (void)c; rt_log("diag: host diagnostics"); }
-static void ov_aoc_initialize(Cpu *c) { (void)c; rt_log("aoc: no add-on content"); }
+static void ov_aoc_initialize(Cpu *c) { (void)c; rt_log("aoc: %d extracted add-on packages", fs_aoc_indices(NULL, 0, 2)); }
+static void ov_aoc_count(Cpu *c) { ret_x(c, fs_aoc_indices(NULL, 0, 2)); }
+static void ov_aoc_event(Cpu *c) { kern_bind_system_event(c, arg_x(c, 0), 0); }
 // 1.4.3's main lists add-on content (MNG services.c host_aoc_list): there is none.
 // int ListAddOnContent(AddOnContentIndex *out, int offset, int count)
 static void ov_aoc_list(Cpu *c) {
     int offset = (int)arg_x(c, 1), count = (int)arg_x(c, 2);
     if (offset < 0 || count < 0) rt_fatal("aoc: ListAddOnContent range %d+%d", offset, count);
-    ret_x(c, 0);
+    ret_x(c, fs_aoc_indices(arg_p(c, 0), offset, count));
 }
 static void ov_err_context(Cpu *c) { (void)c; rt_log("err: error contexts stay local"); }
+// Communication is unavailable in this offline port; do not open console services or show a system prompt.
+static void ov_free_communication_unavailable(Cpu *c) { ret_x(c, 0); }
+static void ov_end_free_communication(Cpu *c) { (void)c; }
 static void ov_pctl_initialize(Cpu *c) { (void)c; rt_log("pctl: no parental controls"); }
 static void ov_abort_observer(Cpu *c) { (void)c; rt_log("diag: the host crash reporter observes aborts"); }
 
@@ -433,6 +466,30 @@ static void ov_user_id(Cpu *c) {
     if (ok) *out = local;
     plat_mutex_unlock_shared(&account_lock);
     ret_x(c, ok ? 0 : ACCOUNT_R_INVALID);
+}
+
+// The local user has no Nintendo network account; never pass its host token into the SDK's IPC handle layout.
+static void ov_network_account_available(Cpu *c) {
+    uint8_t *out = arg_p(c, 0);
+    plat_mutex_lock_shared(&account_lock);
+    int ok = out && valid_handle(arg_p(c, 1));
+    if (ok) *out = 0;
+    plat_mutex_unlock_shared(&account_lock);
+    ret_x(c, ok ? 0 : ACCOUNT_R_INVALID);
+}
+
+int ov_probe_network_account(void) {
+    Cpu c = {0}; UserHandle h = {0};
+    GuestFn query = hostfn_override("_ZN2nn7account32IsNetworkServiceAccountAvailableEPbRKNS0_10UserHandleE");
+    if (!query) return 0;
+    c.x[0] = (uint64_t)&h; ov_open_user(&c);
+    if (!c.x[0]) return 0;
+    uint8_t result[4] = {1, 0xab, 0xcd, 0xef};
+    c.x[0] = (uint64_t)result; c.x[1] = (uint64_t)&h; query(&c);
+    int ok = !c.x[0] && !result[0] && result[1] == 0xab && result[2] == 0xcd && result[3] == 0xef;
+    c.x[0] = (uint64_t)&h; ov_close_user(&c);
+    result[0] = 0x55; c.x[0] = (uint64_t)result; c.x[1] = (uint64_t)&h; query(&c);
+    return ok && c.x[0] == ACCOUNT_R_INVALID && result[0] == 0x55;
 }
 
 // Result GetUserExistence(bool *out, const Uid &)
@@ -782,9 +839,12 @@ HOST_OVERRIDE("_ZN2nn2oe24SetExpectedVolumeBalanceEff", ov_set_balance);
 HOST_OVERRIDE("_ZN2nn2oe25GetProgramTotalActiveTimeEv", ov_active_time);
 HOST_OVERRIDE("_ZN2nn2oe38SetUserInactivityDetectionTimeExtendedEb", ov_inactivity_extended);
 HOST_OVERRIDE("_ZN2nn2oe44SetUserInactivityDetectionTimeExtendedUnsafeEb", ov_inactivity_extended);
+HOST_OVERRIDE("_ZN2nn2oe31EnterExitRequestHandlingSectionEv", ov_enter_exit_section);
+HOST_OVERRIDE("_ZN2nn2oe31LeaveExitRequestHandlingSectionEv", ov_leave_exit_section);
 HOST_OVERRIDE("_ZN2nn2oe17FinishStartupLogoEv", ov_finish_logo);
 HOST_OVERRIDE("_ZN2nn2oe25TryPopNotificationMessageEPj", ov_try_pop);
 HOST_OVERRIDE("_ZN2nn2oe22PopNotificationMessageEv", ov_pop);
+HOST_OVERRIDE("_ZN2nn5prepo10InitializeEv", ov_result_ok);
 HOST_OVERRIDE("_ZN2nn5prepo10PlayReport4SaveEv", ov_report_save);
 HOST_OVERRIDE("_ZN2nn5prepo10PlayReport4SaveERKNS_7account3UidE", ov_report_save);
 HOST_OVERRIDE("_ZN2nn5prepo28RequestImmediateTransmissionEv", ov_result_ok);
@@ -807,9 +867,14 @@ HOST_OVERRIDE("_ZN2nn3err9ShowErrorENS_6ResultE", ov_show_error);
 
 HOST_OVERRIDE("nndiagStartup", ov_diag_startup);
 HOST_OVERRIDE("_ZN2nn3aoc10InitializeEv", ov_aoc_initialize);
+HOST_OVERRIDE("_ZN2nn3aoc17CountAddOnContentEv", ov_aoc_count);
+HOST_OVERRIDE("_ZN2nn3aoc31GetAddOnContentListChangedEventEPNS_2os11SystemEventE", ov_aoc_event);
 HOST_OVERRIDE("_ZN2nn3aoc16ListAddOnContentEPiii", ov_aoc_list);
 HOST_OVERRIDE("_ZN2nn3err26InitializeContextWriterApiEv", ov_err_context);
 HOST_OVERRIDE("_ZN2nn4pctl10InitializeEv", ov_pctl_initialize);
+HOST_OVERRIDE("_ZN2nn4pctl28IsFreeCommunicationAvailableEv", ov_free_communication_unavailable);
+HOST_OVERRIDE("_ZN2nn4pctl25TryBeginFreeCommunicationEb", ov_free_communication_unavailable);
+HOST_OVERRIDE("_ZN2nn4pctl20EndFreeCommunicationEv", ov_end_free_communication);
 HOST_OVERRIDE("_ZN2nn4diag34InitializeApplicationAbortObserverEv", ov_abort_observer);
 
 HOST_OBSERVER("_ZN2nn2os21AllocateAddressRegionEPmm", obs_address_region);
@@ -823,6 +888,7 @@ HOST_OVERRIDE("_ZN2nn7account10InitializeEv", ov_account_initialize);
 HOST_OVERRIDE("_ZN2nn7account22TryOpenPreselectedUserEPNS0_10UserHandleE", ov_open_user);
 HOST_OVERRIDE("_ZN2nn7account9CloseUserERKNS0_10UserHandleE", ov_close_user);
 HOST_OVERRIDE("_ZN2nn7account9GetUserIdEPNS0_3UidERKNS0_10UserHandleE", ov_user_id);
+HOST_OVERRIDE("_ZN2nn7account32IsNetworkServiceAccountAvailableEPbRKNS0_10UserHandleE", ov_network_account_available);
 HOST_OVERRIDE("_ZN2nn7account16GetUserExistenceEPbRKNS0_3UidE", ov_user_existence);
 HOST_OVERRIDE("_ZN2nn7account11GetNicknameEPNS0_8NicknameERKNS0_3UidE", ov_nickname);
 

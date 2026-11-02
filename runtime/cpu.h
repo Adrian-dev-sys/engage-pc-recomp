@@ -18,7 +18,9 @@ typedef struct __attribute__((aligned(16))) Cpu {
     uint64_t fpcr;           // 320: guest FPCR/FPSR (portable FP/SIMD lowering only; the asm path uses the host's)
     uint64_t fpsr;           // 328
     uint64_t excl_val_hi;    // 336: upper half of a 128-bit exclusive pair (LDXP/LDAXP of two X registers)
-    uint8_t _pad[512 - 344];
+    uint64_t resume_pc;      // 344: nonlocal guest continuation, zero during ordinary calls
+    void *call_frame;        // 352: host-to-guest continuation boundary, per Cpu/fiber
+    uint8_t _pad[512 - 360];
     __uint128_t v[32];       // 512
 } Cpu;
 
@@ -32,6 +34,8 @@ _Static_assert(offsetof(Cpu, v) == 512, "v");
 typedef void (*GuestFn)(Cpu *);
 
 // ---- runtime services (runtime/*.c)
+void rt_dispatch_resume(Cpu *c);
+void rt_guest_resume(Cpu *c, uint64_t target) __attribute__((noreturn));
 void rt_dispatch(Cpu *c);                 // call function at c->pc
 void rt_spin_gate(Cpu *c, uint64_t head);  // a pass of a spin wait loop (kernel.c, recomp/patches.py `spin`)
 void rt_svc(Cpu *c, uint32_t imm, uint64_t pc);

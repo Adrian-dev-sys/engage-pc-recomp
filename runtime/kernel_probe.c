@@ -27,6 +27,8 @@ static int failures;
 static uint64_t a_lock_waiter, a_cv_waiter, a_cv_order_waiter, a_arb_waiter, a_event_waiter, a_core_worker,
     a_exit_entry, a_exit_nested, a_fiber_fn, a_fiber_exit_thread, a_fiber_exit_fn, a_tick_worker;
 static uint64_t a_fib_init, a_fib_fin, a_fib_switch, a_fib_cur, tick_stub;
+static uint64_t a_pause_worker;
+static volatile int32_t pause_runs, pause_exit;
 
 // ---- helpers: SVCs through rt_svc, thread start and join
 static uint32_t sv(Cpu *c, uint32_t imm, uint64_t a0, uint64_t a1, uint64_t a2, uint64_t a3) {
@@ -603,6 +605,45 @@ static void test_exit_process(Cpu *c) {
     printf("ExitProcess: exit path reached once with code %u\n", exit_code);
 }
 
+static void pause_worker(Cpu *c) {
+    int sleeping = c->x[0] != 0;
+    c->x[19] = 0x123456789abcdef0ull;
+    while (!plat_cas32(&pause_exit, 0, 0)) {
+        plat_inc32(&pause_runs);
+        sv(c, 0x0B, sleeping ? 2000000 : 0, 0, 0, 0);
+    }
+    exit_thread(c);
+}
+
+static void test_thread_pause(Cpu *c) {
+    for (int sleeping = 0; sleeping <= 1; sleeping++) {
+        plat_xchg32(&pause_runs, 0); plat_xchg32(&pause_exit, 0);
+        uint32_t handle = create(c, a_pause_worker, (void *)(intptr_t)sleeping, 44, 1);
+        CHECK(sv(c, 0x32, 0, 1, 0, 0) == KERN_R_BAD_HANDLE, "pause invalid handle rejected");
+        CHECK(sv(c, 0x32, KERN_H_CURRENT_THREAD, 1, 0, 0) == KERN_R_BAD_STATE, "self pause rejected");
+        CHECK(sv(c, 0x32, handle, 3, 0, 0) == KERN_R_INVALID_ENUM, "invalid activity rejected");
+        start(c, handle);
+        for (int i = 0; i < 1000 && !plat_cas32(&pause_runs, 0, 0); i++) sleep_ms(c, 1);
+        uint8_t context[0x320] __attribute__((aligned(16)));
+        CHECK(sv(c, 0x33, ga(context), handle, 0, 0) == KERN_R_BAD_STATE, "context of a running thread rejected");
+        for (int cycle = 0; cycle < 10; cycle++) {
+            CHECK(sv(c, 0x32, handle, 1, 0, 0) == 0, "pause running thread");
+            int before = plat_cas32(&pause_runs, 0, 0);
+            sleep_ms(c, 2);
+            CHECK(plat_cas32(&pause_runs, 0, 0) == before, "paused thread made progress");
+            CHECK(sv(c, 0x33, ga(context), handle, 0, 0) == 0, "get paused context");
+            CHECK(LD64(ga(context) + 19 * 8) == 0x123456789abcdef0ull && LD64(ga(context) + 0xf8),
+                  "paused context preserves roots and SP");
+            CHECK(sv(c, 0x32, handle, 0, 0, 0) == 0, "resume paused thread");
+            for (int i = 0; i < 1000 && plat_cas32(&pause_runs, 0, 0) == before; i++) sleep_ms(c, 1);
+            CHECK(plat_cas32(&pause_runs, 0, 0) > before, "resumed thread made no progress");
+        }
+        plat_xchg32(&pause_exit, 1);
+        join(c, handle);
+        printf("pause: 10 stop/context/resume cycles checked (%s thread)\n", sleeping ? "sleeping" : "running");
+    }
+}
+
 static void probe_main(Cpu *c) {
     Cpu *again;
     uint32_t me = kern_main_thread(&again);
@@ -620,6 +661,7 @@ static void probe_main(Cpu *c) {
     test_arbiter(c);
     test_events(c);
     test_cores(c);
+    test_thread_pause(c);
     test_fibers(c);
     test_exit(c);
     test_lifted_ticks(c);
@@ -696,6 +738,7 @@ int probe_kernel(void) {
     a_fiber_exit_thread = hostfn_register("probe-kernel fiber exit thread", fiber_exit_thread);
     a_fiber_exit_fn = hostfn_register("probe-kernel fiber exit", fiber_exit_fn);
     a_tick_worker = hostfn_register("probe-kernel tick worker", tick_worker);
+    a_pause_worker = hostfn_register("probe-kernel pause worker", pause_worker);
     a_fib_init = hostfn_register(KERN_SYM_INITIALIZE_FIBER, kern_fiber_initialize);   // the loader's addresses
     a_fib_fin = hostfn_register(KERN_SYM_FINALIZE_FIBER, kern_fiber_finalize);
     a_fib_switch = hostfn_register(KERN_SYM_SWITCH_TO_FIBER, kern_fiber_switch);

@@ -1,0 +1,11 @@
+# Copy to config.local.toml and replace these local paths. Never paste key values here.
+[input]
+base = 'D:\YourDumps\Engage-base.nsp'
+update = 'D:\YourDumps\Engage-update-2.0.0.nsp'
+keys = 'D:\YourDumps\prod.keys'
+# title_keys = 'D:\YourDumps\title.keys'
+firmware = 'D:\YourDumps\firmware-nca-directory'
+
+[input.dlc]
+"0100A6301214F001" = 'D:\YourDumps\Engage-expansion-pass.nsp'
+"0100A6301214F002" = 'D:\YourDumps\Engage-order-of-heroes.nsp'

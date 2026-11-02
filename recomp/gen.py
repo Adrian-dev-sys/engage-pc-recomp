@@ -23,6 +23,7 @@ Chunks are sized from a per-instruction estimate of the C they produce, so their
 the input; a chunk whose text did not change is not rewritten and keeps its mtime.
 """
 import argparse
+import bisect
 import json
 import multiprocessing as mp
 import os
@@ -38,6 +39,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'tools'))
 sys.path.insert(0, str(ROOT / 'recomp'))
 
+import eh  # noqa: E402
 import flags  # noqa: E402
 import hostmem  # noqa: E402
 import jumptables  # noqa: E402
@@ -208,8 +210,10 @@ def partition(est, max_fns, max_bytes, big_fn):
 class Emitter:
     """C for the functions of one module. starts is the set of every function start of the module."""
 
-    def __init__(self, mod, starts, patched=None, reg_locals=regs.LOCALS, callee_saved=True, spins=None):
+    def __init__(self, mod, starts, patched=None, reg_locals=regs.LOCALS, callee_saved=True, spins=None, continuations=False):
         self.mod = mod
+        self.continuations = continuations
+        self.landing_pads = sorted(eh.landing_pads(mod)) if continuations else []
         self.starts = starts
         self.patched = patched or {}   # {address: (set index, [replacement words])} (recomp/patches.py)
         self.spins = spins or {}       # {spin wait back-edge: its head} (recomp/patches.py `spin`)
@@ -322,13 +326,21 @@ class Emitter:
         insns = [mod.lift(a) for a in range(entry, end, 4)]
         labels, tables = self.scan(insns, entry, end)
         refs = set()
+        resume = set()
+        if self.continuations:
+            lo = bisect.bisect_left(self.landing_pads, entry)
+            hi = bisect.bisect_left(self.landing_pads, end)
+            resume = {entry, *self.landing_pads[lo:hi]}
+            resume.update(entry + 4 * (i + 1) for i, ins in enumerate(insns[:-1]) if ins.kind in ('bl', 'blr'))
+            labels.update(resume)
         all_labels = 'all' in tables.values()
         if all_labels:
             labels = set(range(entry, end, 4))
         # An unresolved computed br re-enters the function through fb_<entry>, a C function of its own, which local
         # flags would not survive; such functions keep NZCV in c->nzcv.
         # The same holds for registers in locals (recomp/regs.py): fb_<entry> keeps them in the Cpu too.
-        local = not all_labels
+        # A landing pad can bypass every earlier definition; keep resumed state in Cpu.
+        local = not all_labels and not self.continuations
         spill, reload, reload_call = (regs.SPILL, regs.RELOAD, regs.RELOAD_CALL) if local else ('', '', '')
         succ = self.flow(insns, entry, end, tables) if local else None
         fp = self.flag_plan(insns, entry, end, tables, succ) if local else None
@@ -364,15 +376,22 @@ class Emitter:
             cases = ' '.join(f'case {hx(t)}: goto L_{t:x};' for t in range(entry, end, 4))
             redispatch = f'{MUSTTAIL} {fb}(c);'
             out = [f'static void {fb}(Cpu *c);',
-                   f'void {fname(entry)}(Cpu *c) {{', f'    FN_ENTER({hx(entry)});', f'    c->pc = {hx(entry)};',
+                   f'void {fname(entry)}(Cpu *c) {{', f'    FN_ENTER({hx(entry)});', f'    c->pc = c->resume_pc ? c->resume_pc : {hx(entry)};' if self.continuations else f'    c->pc = {hx(entry)};',
                    f'    {redispatch}', '}',
-                   f'static void {fb}(Cpu *c) {{', f'    switch (c->pc) {{ {cases} default: break; }}',
+                   f'static void {fb}(Cpu *c) {{', *(['    c->resume_pc = 0;', '    uint64_t return_pc = c->x[30], return_sp = c->sp;'] if self.continuations else []), f'    switch (c->pc) {{ {cases} default: break; }}',
                    f'    {MUSTTAIL} rt_dispatch(c);']
         else:
             redispatch = f'{MUSTTAIL} rt_dispatch(c);'
             out = [f'void {fname(entry)}(Cpu *c) {{', f'    FN_ENTER({hx(entry)});']
-            if fp.used:
+            if fp and fp.used:
                 out.append('    ' + fp.decl())
+
+        if self.continuations and not all_labels:
+            cases = ' '.join(f'case {hx(t)}: goto L_{t:x};' for t in sorted(resume))
+            out += ['    uint64_t return_pc = c->x[30], return_sp = c->sp;',
+                    '    if (c->resume_pc) {',
+                    '        uint64_t target = c->resume_pc; c->resume_pc = 0;',
+                    f'        switch (target) {{ {cases} default: rt_udf(c, target); }}', '    }']
 
         def call(t, a):
             if t in starts:
@@ -441,7 +460,7 @@ class Emitter:
                 else:
                     emit(i, f'    {publish(i)}{spill}c->pc = {ins.target}; {MUSTTAIL} rt_dispatch(c);')
             elif k == 'ret':
-                emit(i, f'    {spill}return;')
+                emit(i, f'    {spill}' + ('if (c->x[30] != return_pc || c->sp != return_sp) rt_guest_resume(c, c->x[30]); ' if self.continuations else '') + 'return;')
             else:
                 raise ValueError(f'{a:#x}: unknown instruction kind {k!r}')
         n = len(insns)
@@ -622,8 +641,9 @@ def main():
     ap.add_argument('--no-callee-saved-trust', action='store_true',
                     help='reload X19-X29 and SP after every call too, instead of trusting AAPCS64 (slower; for '
                          'telling a broken callee from a generator bug)')
+    ap.add_argument('--continuations', action='store_true', help='support exception landing pads and nonlocal guest returns')
     args = ap.parse_args()
-    opts = {'reg_locals': args.reg_locals, 'callee_saved': not args.no_callee_saved_trust}
+    opts = {'reg_locals': args.reg_locals, 'callee_saved': not args.no_callee_saved_trust, 'continuations': args.continuations}
 
     t0 = time.perf_counter()
     mods = layout(args.exefs)

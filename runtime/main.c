@@ -24,6 +24,7 @@
 #include <string.h>
 
 #include "cfg.h"
+#include "fs.h"
 #include "host.h"
 #include "platform/platform.h"
 #include "sha256.h"
@@ -107,13 +108,14 @@ static void log_open(int game) {
     if (cut && (size_t)(cut - dir) + sizeof "/logs" <= sizeof dir) {
         strcpy(cut, "/logs");
         plat_file_mkdir_p(dir);
+        const char *stem = RT_ENGAGE ? "engage" : "totk";
         for (int i = LOG_KEEP - 1; i > 0; i--) {   // totk.3.log -> totk.4.log, ..., totk.log -> totk.1.log
-            if (i > 1) snprintf(from, sizeof from, "%s/totk.%d.log", dir, i - 1);
-            else snprintf(from, sizeof from, "%s/totk.log", dir);
-            snprintf(to, sizeof to, "%s/totk.%d.log", dir, i);
+            if (i > 1) snprintf(from, sizeof from, "%s/%s.%d.log", dir, stem, i - 1);
+            else snprintf(from, sizeof from, "%s/%s.log", dir, stem);
+            snprintf(to, sizeof to, "%s/%s.%d.log", dir, stem, i);
             if (plat_file_exists(from)) plat_file_replace(from, to);
         }
-        snprintf(g_log_path, sizeof g_log_path, "%s/totk.log", dir);
+        snprintf(g_log_path, sizeof g_log_path, "%s/%s.log", dir, stem);
         g_log_file = plat_append_open(g_log_path);
     }
     if (!g_log_file) {
@@ -380,7 +382,8 @@ static void check_memory(void) {
     mem_query(RT_HOSTFN_BASE + 0x40, &q);
     CHECK(q.state == 0x10 && q.base == RT_HOSTFN_BASE, "QueryMemory on the host-function window");
     mem_query(g->alias.base + g->alias.size + 0x1000, &q);
-    CHECK(q.state == 3 && q.base == g->alias.base + g->alias.size, "QueryMemory on host memory");
+    CHECK(q.state == (RT_ENGAGE ? 0 : 3) && q.perm == (RT_ENGAGE ? 0 : 5) &&
+          q.base == g->alias.base + g->alias.size, "QueryMemory on unmapped host memory");
     CHECK(mem_set_heap_size(0, &heap) == 0, "SetHeapSize 0");
     printf("memory: heap, physical memory, stack move, QueryMemory, GetInfo: %s\n", failures > before ? "FAIL" : "ok");
 }
@@ -428,7 +431,7 @@ static int selftest(void) {
 
 static int usage(const char *argv0) {
     fprintf(stderr, "usage: %s [--exefs DIR] [--romfs DIR] [--profile DIR] [--selftest | --probe-loader | "
-                    "--probe-cfg | --probe-dpi | --probe-kernel | --probe-ipc | --probe-services | --probe-fs | --probe-gfx-abi | "
+                    "--probe-engage-input | --probe-audout | --probe-cfg | --probe-dpi | --probe-kernel | --probe-ipc | --probe-services | --probe-fs | --probe-gfx-abi | "
                     "--probe-nvn | --probe-nvn-tex | --probe-window | --probe-shader | --probe-vkmem | "
                     "--probe-vkexec | --probe-astc | --probe-movie | --prepare-shaders | --warm-shaders | --boot |--seconds S [--shot PNG]]\n", argv0);
     return 2;
@@ -521,8 +524,11 @@ int main(int argc, char **argv) {
 #endif
     if (!strcmp(mode, "--probe-kernel")) return probe_kernel();
     if (!strcmp(mode, "--probe-ipc")) return probe_ipc();
+    if (!strcmp(mode, "--probe-audout")) return probe_audout();
+    if (!strcmp(mode, "--probe-engage-input")) return probe_engage_input();
     if (!strcmp(mode, "--probe-services")) return probe_services();
     if (!strcmp(mode, "--probe-fs")) return probe_fs();
+    if (!strcmp(mode, "--probe-engage-fs")) return probe_engage_fs();
     if (!strcmp(mode, "--probe-gfx-abi")) return probe_gfx_abi();
     if (!strcmp(mode, "--probe-nvn")) return probe_nvn();
     if (!strcmp(mode, "--probe-nvn-tex")) return probe_nvn_tex();

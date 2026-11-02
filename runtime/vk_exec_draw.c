@@ -1539,7 +1539,7 @@ static const RsList *rs_list(const VkExec *ex, const VkPipeInfo *info) {
     if (!rs_lists.klen) nvn_hm_init(&rs_lists, sizeof info);
     RsList *l = nvn_hm_get(&rs_lists, &info);
     if (!l) {
-        static RsRange tmp[MAX_DESC];
+        static RsRange tmp[MAX_DESC * 2];
         RsPtr ptr[RS_PTRS];
         uint32_t n = 0, nd = 0, np = 0;
         int sup = 0, c0 = 0, ok = 1;
@@ -1572,6 +1572,8 @@ static const RsList *rs_list(const VkExec *ex, const VkPipeInfo *info) {
                 for (uint32_t k = 0; k < cnt; k++) {
                     int slot = r->slot + (int)k;
                     if (slot >= 0 && slot < cap) rs_add(tmp, &n, ex, img ? &ex->img[st][slot] : &ex->tex[st][slot], 8);
+                    if (!img && (r->handle >> 28) == 1 && r->sampler_slot >= 0 && r->sampler_slot < 128)
+                        rs_add(tmp, &n, ex, &ex->samp[st][r->sampler_slot], 8);
                 }
             }
         }
@@ -1726,10 +1728,7 @@ static void bind_resources(VkExec *ex, const VkPipeInfo *info) {
                 kind = 1;
                 vk_texture_lock();   // tex_info looks up with the texture lock held
                 for (uint32_t k = 0; k < cnt; k++) {
-                    int slot = r->slot + (int)k;
-                    uint64_t h = 0;
-                    if (img) h = slot >= 0 && slot < 32 ? ex->img[st][slot] : 0;
-                    else h = slot >= 0 && slot < 128 ? ex->tex[st][slot] : 0;
+                    uint64_t h = vk_exec_resource_handle(ex, r, st, img, (int)k);
                     tex_info(ex, r, h, img, r->separate, &o[k].image);
                     o[k].w[2] = (uint32_t)o[k].image.imageLayout;   // zero the tail padding
                 }

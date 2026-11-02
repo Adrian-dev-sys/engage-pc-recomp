@@ -22,10 +22,14 @@ BLOCKED_SUFFIXES = {
     ".bfres", ".bntx", ".bnsh", ".sarc", ".szs", ".zs", ".pack", ".byml",
     ".bgyml", ".msbt", ".bars", ".bwav", ".bfwav", ".bfstm", ".bfttf",
     ".bfotf", ".sharcb", ".webm",
+    # Engage's Unity assets, IL2CPP metadata and Wwise audio.
+    ".bundle", ".unity3d", ".assets", ".ress", ".resource", ".wem", ".bnk",
 }
 
 # ExeFS modules carry no extension.
-BLOCKED_NAMES = {"main", "sdk", "rtld", "subsdk0", "subsdk1", "main.npdm"}
+BLOCKED_NAMES = {"main", "sdk", "rtld", "subsdk0", "subsdk1", "main.npdm",
+                 "global-metadata.dat", "unity default resources", "unity_builtin_extra",
+                 "control.nacp", "icon.jpg", "engage.ico"}
 
 # Written by the code generator into every file it emits.
 GENERATED_MARKER = "TOTK_RECOMP_" + "GENERATED_FROM_GAME_CODE"

@@ -8,6 +8,7 @@
 #include <string.h>
 
 #include "gfx.h"
+#include "vk_exec.h"
 #include "host.h"
 #include "platform/platform.h"
 
@@ -53,7 +54,7 @@ static int hexval(char c) { return c <= '9' ? c - '0' : (c | 32) - 'a' + 10; }
 // parent of totk.exe that has one with a jobs.json, the running game version's first, then the others' (any census
 // serves a probe). 1 with that folder in dir.
 int probe_census_dir(char *dir, size_t n) {
-    const char *const versions[3] = {RT_V111 ? "v111" : RT_V143 ? "v143" : "v121",
+    const char *const versions[3] = {RT_ENGAGE ? "engage-v200" : RT_V111 ? "v111" : RT_V143 ? "v143" : "v121",
                                      RT_V111 ? "v121" : RT_V143 ? "v121" : "v143",
                                      RT_V111 ? "v143" : RT_V143 ? "v111" : "v111"};
     for (int v = 0; v < 3; v++) {
@@ -93,6 +94,8 @@ static int pick_entries(const char *jobs, Entry *out) {
     }
     // 11 vertex, 11 fragment, 10 compute shaders, spread evenly over each stage's list
     int want[3] = {11, 11, 10}, taken[3] = {0, 0, 0}, seen[3] = {0, 0, 0}, got = 0;
+    // Engage's extracted census has one compute shader; keep 32 samples across its available stages.
+    if (RT_ENGAGE) { want[0] = 16; want[1] = 15; want[2] = 1; }
     for (int i = 0; i < n; i++) {
         int s = all[i].stage == GFX_STAGE_VS ? 0 : all[i].stage == GFX_STAGE_FS ? 1 : 2;
         if (per_stage[s] < want[s]) want[s] = per_stage[s];
@@ -144,6 +147,12 @@ static void remove_dir(const char *dir) {
 #define FAIL_IF(cond, ...) do { if (cond) { printf("probe-shader: FAILED: " __VA_ARGS__); printf("\n"); remove_dir(dir); return 1; } } while (0)
 
 int probe_shader(void) {
+    if (!gfx_shader_reflection_probe()) rt_fatal("probe-shader: NVN separate handle reflection");
+    VkExec state = {0};
+    GfxShaderRes binding = {.slot = 1, .sampler_slot = 2, .handle = 0x10000000};
+    state.tex[0][1] = 17; state.samp[0][2] = 23u << 20;
+    if (vk_exec_resource_handle(&state, &binding, 0, 0, 0) != (17u | 23u << 20))
+        rt_fatal("probe-shader: separate texture/sampler binding");
     char path[PLAT_PATH_MAX * 2 + 64];
     CHECK(probe_census_dir(root, sizeof root),
           "no build/v%d/shaders/jobs.json above the exe (run tools/shader_census.py --version v%d)", rt_game_version,
