@@ -1,6 +1,6 @@
 # Installing Engage PC Recomp
 
-The Windows setup candidate is undergoing local testing. **There is no published installer asset yet.** This page documents its installation flow; do not download a TotK setup package for Engage.
+The Windows setup pipeline passed a local installation test on a second drive. **There is no published installer asset yet.** This page documents its installation flow; do not download a TotK setup package for Engage.
 
 ## What you need
 

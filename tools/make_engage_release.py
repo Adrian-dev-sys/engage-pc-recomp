@@ -117,6 +117,8 @@ def build(out):
     upstream.build_llvm(out)
     upstream.build_deps(out)
     copy_sources(out)
+    commit = subprocess.check_output(['git', '-C', str(ROOT), 'rev-parse', 'HEAD'], text=True).strip()
+    (out / 'SOURCE_COMMIT').write_text(commit + '\n', encoding='utf-8')
     binary = out / 'bin'
     binary.mkdir(exist_ok=True)
     for name in ('totk_xlate.exe', 'totk_xlate.id'):

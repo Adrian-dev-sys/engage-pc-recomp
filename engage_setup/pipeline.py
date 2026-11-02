@@ -34,6 +34,7 @@ def write_json(path, data):
 
 def validate_destination(dest, inputs, root):
     dest = dest.resolve()
+    root = Path(root).resolve()
     if dest == Path(dest.anchor) or dest == root or root.is_relative_to(dest) or dest.is_relative_to(root):
         raise ValueError('Choose a separate install folder outside the setup package.')
     if any(p.resolve() == dest or p.resolve().is_relative_to(dest) or dest.is_relative_to(p.resolve()) for p in inputs):

@@ -45,6 +45,8 @@ class SetupTest(unittest.TestCase):
                 validate_destination(dest, [dest / 'game.nsp'], setup)
             with self.assertRaisesRegex(ValueError, 'outside'):
                 validate_destination(setup / 'install', [], setup)
+            with self.assertRaisesRegex(ValueError, 'outside'):
+                validate_destination(setup / 'install', [], setup / '..' / 'setup')
             self.assertEqual((dest / 'important.txt').read_text(), 'keep')
 
     def test_state_identity_and_safe_cleanup(self):

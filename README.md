@@ -5,7 +5,7 @@ Experimental native Windows x86-64 recompilation of **Fire Emblem Engage 2.0.0**
 [![Source checks](https://github.com/veneito/engage-pc-recomp/actions/workflows/content-guard.yml/badge.svg)](https://github.com/veneito/engage-pc-recomp/actions/workflows/content-guard.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-**Early alpha. The Windows setup candidate is being verified; no installer asset has been published yet.** First-battle gameplay and audio work in the tested development build. Full-game compatibility is still being established.
+**Early alpha. The Windows setup pipeline passed a local installation test; no installer asset has been published yet.** First-battle gameplay and audio work in the tested development build. Full-game compatibility is still being established.
 
 [Installation guide](docs/installing-engage.md) · [Report a bug](https://github.com/veneito/engage-pc-recomp/issues/new/choose) · [Build from source](docs/building-engage.md)
 

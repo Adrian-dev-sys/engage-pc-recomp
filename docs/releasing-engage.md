@@ -34,6 +34,18 @@ A setup release also needs a clean-machine end-to-end test, cancellation/retry c
 
 The current local test uses bundled tools with a minimal PATH and a fresh install folder on D:. This is a developer-machine test, **not a clean-VM certification**. Before calling the release broadly supported, repeat it on a clean Windows machine and record the hardware/driver, install result, first launch, audio, save/load and post-battle behavior. Initial releases must remain marked prerelease.
 
+Observed locally on Windows 11 with an NVIDIA RTX 4060:
+
+- Base/update identities, Engage 2.0.0 build IDs, both DLC packages and all six fonts verified.
+- Extraction and packing of 206,874 files completed on the second drive; 16,572,416,159-byte RomFS image.
+- Continuation-enabled code generation completed with no unsupported instructions reported.
+- Setup resumed from the completed extraction/generation checkpoints after a packaging-path fix; all 568 compilation objects built, installation and cleanup completed successfully.
+- The installed executable passed its CPU/audio checks and Engage filesystem probe (both DLC mounts, packed index and audio-bank paths).
+- A bounded first boot rendered the opening movie, opened SDL audio, and exited normally. Cold shader/pipeline work caused noticeable first-launch stalls.
+- Candidate setup's isolated Python imports, missing-input error path, GUI selftest and content scan passed. The README screenshot contains only the empty setup form and original setup icon.
+
+This does not verify fresh-VM installation, save/load, DLC gameplay, post-battle progression or full-game stability. Keep local logs, screenshots and installed game files out of release assets.
+
 ## Known rendering report
 
 The unit-information panel was reported darker in one screenshot and blue in another. The examples show different states (a unit alone versus paired with Marth). A [normal-state gameplay reference](https://images.igdb.com/igdb/image/upload/t_1080p_2x/sciwxx.webp) also shows a dark panel for Alear without an Emblem partner. This supports a state-dependent UI difference; it does not establish a renderer defect or validate every color. Compare matching unit/state/settings before changing global gamma, blending or shader behavior. No renderer change was made from these screenshots.
