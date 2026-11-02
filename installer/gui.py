@@ -42,9 +42,13 @@ def fix_tcl_paths():
 
 
 class App:
+    catalog_type = Catalog
+    ui_languages = UI_LANGUAGES
+    icon_name = 'totk.ico'
+
     def __init__(self, root, ui_lang, layout, run_args=None):
         self.root, self.layout = root, layout
-        self.cat = Catalog(ui_lang)
+        self.cat = self.catalog_type(ui_lang)
         self.model = Model()
         self.process = None
         self.closing = False
@@ -58,7 +62,7 @@ class App:
         self.fitted = None               # the (width, height) fit last gave the window
 
         root.title(self.cat('ui.title'))
-        icon = layout.runtime / 'totk.ico'
+        icon = layout.runtime / self.icon_name
         png = layout.runtime / 'totk.png'   # Tk loads no .ico off Windows; the Linux release converts it
         if os.name == 'nt' and icon.is_file():
             root.iconbitmap(default=str(icon))
@@ -84,7 +88,7 @@ class App:
         sw = ttk.Frame(top)
         sw.pack(side='right')
         self.ui_var = tk.StringVar(value=self.cat.lang)
-        for code in UI_LANGUAGES:
+        for code in self.ui_languages:
             ttk.Radiobutton(sw, text=code.upper(), value=code, variable=self.ui_var, style='Toolbutton',
                             command=self.switch_language).pack(side='left', padx=1)
         self.body = ttk.Frame(root, padding=PAD)

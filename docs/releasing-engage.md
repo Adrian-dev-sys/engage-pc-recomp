@@ -14,13 +14,25 @@ Before publishing:
 
 Source-only GitHub CI intentionally has no game files, keys or firmware. A green source workflow is not a runtime/gameplay certification. Do not upload local gameplay test folders as Actions artifacts.
 
-## Later Windows setup release
+## Windows setup candidate
 
 Follow TotK's distribution boundary: ship the host runtime/build tools, then extract, recompile and link on the player's computer using their inputs. A complete `engage.exe` is never a public release asset. The user's game icon and fonts are extracted only during local setup.
 
-The inherited TotK setup GUI and `tools/make_release.py` are not Engage installers. Before advertising an Engage installer, finish and test its Engage-specific input selection, base/update merge, both DLC mounts, shared-font extraction, continuation-enabled generation, shader translator, local build, launcher and profile handling.
+`engage_setup` supplies the Engage-specific pipeline and form, reusing the MIT-licensed upstream window, event model and cancellation controller. `tools/make_engage_release.py` bundles the pinned Python/compiler dependencies and a self-contained .NET extractor. The inherited `python -m installer` command still targets TotK; Engage uses `python -m engage_setup`.
+
+Build a candidate with Python 3.14:
+
+```powershell
+.venv-py314\Scripts\python.exe tools\make_engage_release.py `
+  --out build\release\Engage-Setup-<version>-windows `
+  --zip build\release\Engage-Setup-<version>-windows.zip
+```
+
+Keep the source revision clean for a public build. Never substitute a development install folder for the setup bundle. The builder inventories the result, scans for game-derived content, tests isolated imports and the missing-input command, and opens/closes the setup window. Its content check does not replace a local full-install test.
 
 A setup release also needs a clean-machine end-to-end test, cancellation/retry checks, existing-profile preservation, pinned downloads with hash checks, bundled dependency license texts, artifact inventory and checksums. Test the setup's no-game-files failure path in CI. Keep game-dependent verification local and report its scope honestly.
+
+The current local test uses bundled tools with a minimal PATH and a fresh install folder on D:. This is a developer-machine test, **not a clean-VM certification**. Before calling the release broadly supported, repeat it on a clean Windows machine and record the hardware/driver, install result, first launch, audio, save/load and post-battle behavior. Initial releases must remain marked prerelease.
 
 ## Known rendering report
 

@@ -2,7 +2,12 @@
 
 Experimental native Windows x86-64 recompilation of **Fire Emblem Engage 2.0.0**, built on [TotK Recomp](https://github.com/valentderah/totk-pc-recomp).
 
-**Source preview. There is no supported Engage installer release yet.** The inherited TotK installer does not install Engage. Do not use TotK setup packages or game patches for this project.
+[![Source checks](https://github.com/veneito/engage-pc-recomp/actions/workflows/content-guard.yml/badge.svg)](https://github.com/veneito/engage-pc-recomp/actions/workflows/content-guard.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+
+**Early alpha. The Windows setup candidate is being verified; no installer asset has been published yet.** First-battle gameplay and audio work in the tested development build. Full-game compatibility is still being established.
+
+[Installation guide](docs/installing-engage.md) · [Report a bug](https://github.com/veneito/engage-pc-recomp/issues/new/choose) · [Build from source](docs/building-engage.md)
 
 ## Game files stay on your computer
 
@@ -20,15 +25,30 @@ Known limits: save/load, the post-battle transition and long-session stability s
 
 The current evidence is from a Windows 11 machine with an NVIDIA RTX 4060. This is not a claim of compatibility with every GPU or of full-game completion. Linux, Steam Deck, performance patches and inherited TotK features are not verified for Engage.
 
-## Build and run
+## Installing
 
-Follow [the Engage build guide](docs/building-engage.md). It requires developer tools and a local build; there is no ready-to-play executable to download.
+The setup follows the same local-build approach as [TotK Recomp](https://github.com/valentderah/totk-pc-recomp): download setup, select your files, install, and play. Python, the compiler and the extractor are bundled. Your game is compiled on your PC.
+
+1. Extract the **Engage-Setup Windows ZIP** when it becomes available in Releases.
+2. Run **Engage-Setup.exe** and select your base game, **2.0.0** update, keys and firmware folder. Either DLC is optional.
+3. Choose an install folder with **40 GiB free**, then select **Install Engage**.
+4. When setup finishes, select **Play Engage**. Press **F1** for settings.
+
+![Engage Setup — choose your files, install, and play](docs/screenshots/setup.png)
+
+See the [installation guide](docs/installing-engage.md) for requirements and help with update/key errors. This is a Windows alpha; the inherited TotK installer and its game-specific patches do not install Engage.
+
+## Building from source
+
+Follow [the Engage build guide](docs/building-engage.md). Building directly from source requires developer tools. A ready-to-play game executable is never distributed.
 
 Launch a completed local build with `Run-Engage.cmd`. Settings use `engage.ini`; logs use `logs/engage.log` beside the executable. Your profile stays in the ignored `build/profile-engage` directory.
 
 ## Contributing
 
 Read [CONTRIBUTING.md](CONTRIBUTING.md). Report reproducible bugs with the port/game version, GPU/driver and the exact scene. Review logs for personal paths before attaching them. Never attach game data, keys, firmware, saves or locally compiled game executables.
+
+If this project is useful to you, a GitHub star helps others find it. Reproducible bug reports and contributions help make it better.
 
 [Porting notes and observed results](docs/engage-port.md) distinguish tested behavior from open work. [Release policy](docs/releasing-engage.md) describes what may be published and what must be verified before an installer release.
 

@@ -1,6 +1,8 @@
 """Build the Engage 2.0.0 bring-up executable with the local pinned toolchain."""
+import argparse
 import hashlib
 import json
+import os
 import shutil
 import subprocess
 import sys
@@ -11,21 +13,26 @@ from engage_inputs import ROOT, inspect_dlcs, inspect_inputs
 
 
 def main():
-    extracted = ROOT / 'build' / 'extracted' / 'engage-v200'
+    parser = argparse.ArgumentParser(add_help=False)
+    parser.add_argument('--extracted', type=Path, default=ROOT / 'build' / 'extracted' / 'engage-v200')
+    parser.add_argument('--translator', type=Path, default=ROOT / 'build' / 'xlate')
+    extra, remaining = parser.parse_known_args()
+    sys.argv = [sys.argv[0], *remaining]
+    extracted = extra.extracted.resolve()
     report = inspect_inputs(extracted / 'ExeFS', extracted / 'RomFS')
-    report['dlc'] = inspect_dlcs(extracted / 'aoc')
+    report['dlc'] = inspect_dlcs(extracted / 'aoc', require_all=False)
     npdm = extracted / 'ExeFS' / 'main.npdm'
     report['exefs_sha256']['main.npdm'] = hashlib.sha256(npdm.read_bytes()).hexdigest()
-    expected = ROOT / 'build' / 'engage-v200' / 'expected.json'
+    output = Path(sys.argv[sys.argv.index('--out') + 1]).resolve() if '--out' in sys.argv else ROOT / 'build' / 'engage-v200'
+    expected = output / 'expected.json'
     expected.parent.mkdir(parents=True, exist_ok=True)
     expected.write_text(json.dumps(report, indent=2) + '\n', encoding='utf-8')
-    output = Path(sys.argv[sys.argv.index('--out') + 1]).resolve() if '--out' in sys.argv else ROOT / 'build' / 'engage-v200'
-    output.mkdir(parents=True, exist_ok=True)
     icon = output / 'engage.ico'
     source = extracted / 'icon.jpg'
     icon_tool = ROOT / 'tools' / 'make_engage_icon.ps1'
     if not icon.exists() or icon.stat().st_mtime < max(source.stat().st_mtime, icon_tool.stat().st_mtime):
-        subprocess.run(['powershell', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', str(icon_tool),
+        powershell = Path(os.environ.get('SystemRoot', r'C:\Windows')) / 'System32/WindowsPowerShell/v1.0/powershell.exe'
+        subprocess.run([str(powershell), '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', str(icon_tool),
                         '-Source', str(source), '-Output', str(icon)], check=True)
     resource = output / 'engage.rc'
     content = f'''1 24 "{(ROOT / 'runtime' / 'totk.manifest').as_posix()}"
@@ -70,7 +77,7 @@ END
     output = Path(sys.argv[sys.argv.index('--out') + 1]) if '--out' in sys.argv else ROOT / 'build' / 'engage-v200'
     if '--compile-only' not in sys.argv:
         for name in ('totk_xlate.exe', 'totk_xlate.id'):
-            source = ROOT / 'build' / 'xlate' / name
+            source = extra.translator / name
             if source.is_file():
                 shutil.copy2(source, output / name)
 

@@ -10,6 +10,16 @@ from check_content import problems_for
 
 
 class EngageInputsTest(unittest.TestCase):
+    def test_optional_dlc_still_rejects_incomplete_package(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            self.assertEqual(inspect_dlcs(root, require_all=False), [])
+            (root / '2').mkdir()
+            with self.assertRaisesRegex(ValueError, 'DLC 2'):
+                inspect_dlcs(root, require_all=False)
+            (root / '2/h0').touch()
+            self.assertEqual([r['index'] for r in inspect_dlcs(root, require_all=False)], [2])
+
     def test_both_dlc_markers_are_required(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)

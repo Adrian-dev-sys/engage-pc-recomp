@@ -7,6 +7,16 @@ or installer layouts below describe the upstream component's integration, not an
 Engage installer that has been released. Engage's extracted icon, fonts and game
 assets are local build inputs and are not included in public releases.
 
+The Engage setup candidate adds the .NET 10.0.13 Windows x64 runtime for the
+self-contained nxnative extractor (MIT, .NET Foundation and Contributors; its
+third-party notices are bundled under `licenses/`). LibHac 0.19.0 is MIT,
+Copyright (c) 2018-2022 Alex Barney, package source revision
+`cd4004af194a51712812c680f0a028ba9152c0f8`. Both extractor and LibHac license
+texts ship separately. The candidate also carries the upstream Python, Tcl/Tk,
+LLVM, SDL, Opus, libvpx, Zstandard, Vulkan and Ninja notices described below.
+Engage does not bundle hactool or an upstream TotK shader list. The setup's
+E monogram is original project artwork, created in code.
+
 Code copied or adapted from another project is listed here with its source, the exact commit, its license, and the files it went into. Each copied file keeps its original copyright header.
 
 | Component | Source and commit | License | Used in |

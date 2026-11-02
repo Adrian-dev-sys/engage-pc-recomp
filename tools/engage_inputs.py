@@ -16,10 +16,12 @@ BUILDS = {
 DLC_SPECS = {'0100a6301214f001': (1, 'e0'), '0100a6301214f002': (2, 'h0')}
 
 
-def inspect_dlcs(root):
+def inspect_dlcs(root, require_all=True):
     report = []
     for title, (index, marker) in DLC_SPECS.items():
         path = root / str(index) / marker
+        if not require_all and not (root / str(index)).exists():
+            continue
         if not path.is_file() or path.stat().st_size != 0:
             raise ValueError(f'DLC {index} must contain its empty {marker} marker from the package')
         report.append({'title_id': title.upper(), 'index': index, 'marker': marker})

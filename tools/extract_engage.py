@@ -25,7 +25,7 @@ def run_tool(keys, arguments, name, title_keys=None):
     LOGS.mkdir(parents=True, exist_ok=True)
     (LOGS / f'{name}.log').write_text(output, encoding='utf-8')
     if result.returncode:
-        raise ValueError(f'{name} failed (exit {result.returncode}); see build/engage-v200/logs/{name}.log')
+        raise ValueError(f'{name} failed (exit {result.returncode}); see {LOGS / (name + ".log")}')
     return output
 
 
@@ -36,16 +36,21 @@ def check_content(output, kind, title, version):
 
 
 def main():
+    global TOOL, OUT, LOGS
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--config', type=Path, default=ROOT / 'config.local.toml')
+    parser.add_argument('--out', type=Path, default=OUT)
+    parser.add_argument('--tool', type=Path, default=TOOL)
+    parser.add_argument('--logs', type=Path, default=LOGS)
     args = parser.parse_args()
+    TOOL, OUT, LOGS = args.tool, args.out, args.logs
     try:
         data = tomllib.loads(args.config.read_text(encoding='utf-8'))['input']
         keys, base, update = (Path(data[name]) for name in ('keys', 'base', 'update'))
         title_keys = Path(data['title_keys']) if data.get('title_keys') else None
-        dlcs = {title.lower(): Path(path) for title, path in data['dlc'].items()}
-        if set(dlcs) != set(DLC_SPECS):
-            raise ValueError('The config must name both supported DLC title IDs')
+        dlcs = {title.lower(): Path(path) for title, path in data.get('dlc', {}).items()}
+        if not set(dlcs).issubset(DLC_SPECS):
+            raise ValueError('The config contains an unsupported DLC title ID')
         for path in (TOOL, keys, base, update, *dlcs.values()):
             if not path.is_file():
                 raise ValueError(f'Missing input or extractor: {path}')
@@ -70,10 +75,10 @@ def main():
             index, _ = DLC_SPECS[title]
             destination = OUT / 'aoc' / str(index)
             run_tool(keys, ['--aoc', path, destination, title], f'dlc-{index}', title_keys)
-        report['dlc'] = inspect_dlcs(OUT / 'aoc')
-        (ROOT / 'build' / 'engage-v200' / 'inputs.json').write_text(
+        report['dlc'] = inspect_dlcs(OUT / 'aoc', require_all=False)
+        (OUT / 'inputs.json').write_text(
             json.dumps(report, indent=2) + '\n', encoding='utf-8')
-        print('Verified Engage 2.0.0 and extracted both DLCs. Runtime mounting is a separate porting step.')
+        print(f'Verified Engage 2.0.0 and extracted {len(dlcs)} DLC packages.')
     except (OSError, ValueError, KeyError) as error:
         parser.exit(1, f'{error}\n')
 

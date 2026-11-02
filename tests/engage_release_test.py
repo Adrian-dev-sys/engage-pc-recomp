@@ -6,6 +6,14 @@ from make_engage_source_release import audit_member
 
 
 class ReleaseBoundaryTest(unittest.TestCase):
+    def test_only_the_reviewed_setup_screenshot_is_allowed(self):
+        screenshot = Path(__file__).resolve().parents[1] / 'docs/screenshots/setup.png'
+        audit_member('docs/screenshots/setup.png', screenshot.read_bytes())
+        with self.assertRaises(ValueError):
+            audit_member('docs/screenshots/setup.png', b'unreviewed replacement')
+        with self.assertRaises(ValueError):
+            audit_member('docs/screenshots/gameplay.png', screenshot.read_bytes())
+
     def test_private_outputs_and_links_are_rejected(self):
         for name in ('build/engage.exe', 'generated/main.c', 'config.local.toml', 'prod.keys',
                      'icon.jpg', 'engage.ico', 'Data/test.bundle', 'logs/engage.log',

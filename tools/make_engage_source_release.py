@@ -14,6 +14,8 @@ ROOT = Path(__file__).resolve().parents[1]
 PRIVATE_DIRS = {'build', 'generated', 'toolchain', 'refs', '.git', '.venv', '.venv-py314', '.claude', '.agents', 'notes', '.worktrees'}
 PRIVATE_NAMES = {'config.local.toml', '.env', 'account.uid', 'engage.ini', 'engage-install.json'}
 BINARY_SUFFIXES = {'.exe', '.dll', '.pdb', '.o', '.obj', '.a', '.lib', '.log', '.png', '.jpg', '.jpeg', '.ico'}
+# Reviewed empty-input screenshot of our own setup, containing no game artwork or personal paths.
+SETUP_SHOT = '61710d7d50e10ef9529ddcc7805b3e346be480614cf52e03ce0672139b6a0f28'
 
 
 def audit_member(name, data, regular=True):
@@ -26,7 +28,8 @@ def audit_member(name, data, regular=True):
     if path.name.lower() in BLOCKED_NAMES or suffix in BLOCKED_SUFFIXES:
         raise ValueError(f'Game content path: {name}')
     # This unchanged upstream logo is licensed source artwork, not an extracted game icon.
-    if suffix in BINARY_SUFFIXES and name != 'runtime/totk.ico':
+    reviewed_screenshot = name == 'docs/screenshots/setup.png' and hashlib.sha256(data).hexdigest() == SETUP_SHOT
+    if suffix in BINARY_SUFFIXES and name != 'runtime/totk.ico' and not reviewed_screenshot:
         raise ValueError(f'Binary, log or unreviewed artwork: {name}')
     if len(data) > MAX_BYTES:
         raise ValueError(f'Source entry exceeds content-guard limit: {name}')
