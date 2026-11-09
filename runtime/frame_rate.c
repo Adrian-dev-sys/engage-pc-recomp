@@ -71,6 +71,7 @@ static void frame_limit_live(void);
 void frame_step_init(void) {
     int fps60 = rt_patch_set("fps60"), realtime = rt_patch_set("realtime"), cloth = rt_patch_set("cloth");
     if (realtime < 0) {
+        if (RT_ENGAGE) frame_limit_live();   // sets fps60 (_local Engage table) before the game reads it
         rt_log("frame rate: no patch table, shipping 30 fps whole-vsync steps");
         return;
     }
@@ -124,11 +125,67 @@ static void frame_limit_live(void) {
     limit_hz = hz;
     if (fps60_set == -2) fps60_set = rt_patch_set("fps60");
     if (fps60_set >= 0) rt_patch_switch(fps60_set, hz != 30);
-    if ((hz > 60 || hz == 0) && !step_word)
+    if ((hz > 60 || hz == 0) && !step_word && !RT_ENGAGE)
         rt_log("frame rate: limits above 60 need the real-time step (TOTK_REALTIME=1); 60 fps");
     else if (hz) rt_log("frame rate: limit %d fps", hz);
     else if (gfx_window_refresh_hz() > 0) rt_log("frame rate: limit at the monitor's refresh rate (%.3f Hz now)", gfx_window_refresh_hz());
     else rt_log("frame rate: limit at the monitor's refresh rate (60 until the window measures it)");
+}
+
+// Engage's fps60 sites (_local/patches-engage-v200.txt) read page+0x40 = vSyncCount as a float (frame time * 60),
+// +0x44 = the mod's movement factor 1/15 at 60 scaled the same way, +0x4c = whole vsyncs for get_vSyncCount. The
+// integer is the running sum of the float handed out in whole steps (120 fps: 1, 0, 1, 0), so frame counters keep
+// game time. The float is the 5-frame average display interval, snapped to the limit when within 15% of it, at most
+// 2 (a slower frame slows the game, as at 30 on the console).
+static double eg_samples[STEP_SAMPLES], eg_acc;
+static unsigned eg_count, eg_next;
+
+static void engage_store(double v) {
+    float *p = (float *)((uint8_t *)rt_patch_page() + 0x40);
+    p[0] = (float)v;
+    p[1] = (float)(v / 15.0);
+    eg_acc += v;
+    uint32_t n = (uint32_t)floor(eg_acc + 1e-6);
+    eg_acc -= n;
+    *(uint32_t *)((uint8_t *)rt_patch_page() + 0x4c) = n;
+}
+
+static void engage_frame(double dt) {
+    static double logged_hz;
+    if (fps60_set < 0 || !rt_patch_page()) return;
+    double hz = limit_hz ? limit_hz : gfx_window_refresh_hz();
+    if (hz < LIMIT_MIN_HZ) hz = 60;
+    if (hz > LIMIT_MAX_HZ) hz = LIMIT_MAX_HZ;
+    double nominal = 60.0 / hz, v = nominal;
+    if (hz != logged_hz) {
+        logged_hz = hz;
+        eg_count = eg_next = 0;
+        rt_log("frame rate: Engage game step for %.3f fps (vSyncCount %.4f per frame)", hz, nominal);
+    }
+    if (dt > 0.001 && dt < STEP_RESET_S) {
+        eg_samples[eg_next++ % STEP_SAMPLES] = dt;
+        if (eg_count < STEP_SAMPLES) eg_count++;
+        double sum = 0;
+        for (unsigned i = 0; i < eg_count; i++) sum += eg_samples[i];
+        v = sum / eg_count * 60.0;
+        if (fabs(v - nominal) < 0.15 * nominal) v = nominal;
+        if (v > 2.0) v = 2.0;
+    } else {
+        eg_count = eg_next = 0;
+    }
+    engage_store(v);
+}
+
+// Engage (Unity) asks for present interval 2 but times its frames itself, so any limit but 30 paces at the limit.
+int frame_step_unity_unlocked(void) {
+    if (!RT_ENGAGE) return 0;
+    frame_limit_live();
+    static int primed;
+    if (!primed && fps60_set >= 0 && rt_patch_page()) {   // before the first present: one vsync per frame
+        primed = 1;
+        engage_store(1.0);
+    }
+    return limit_hz != 30;
 }
 
 uint64_t frame_step_cap_ns(void) {
@@ -146,7 +203,7 @@ double frame_step_limit_hz(void) {
     if (hz < 0) return 0;
     double r = hz ? hz : gfx_window_refresh_hz();
     if (r < LIMIT_MIN_HZ) r = 60;
-    return !step_word && r > 60 ? 60 : r > LIMIT_MAX_HZ ? LIMIT_MAX_HZ : r;
+    return !step_word && !RT_ENGAGE && r > 60 ? 60 : r > LIMIT_MAX_HZ ? LIMIT_MAX_HZ : r;
 }
 
 // ---- TOTK_TRACE=perf speed lines
@@ -267,6 +324,7 @@ void frame_step_present(uint64_t display_ns, int interval) {
         }
     }
     last_ns = display_ns;
+    if (RT_ENGAGE) engage_frame(dt);
     // The game clock of untimed script lines: what the game stepped this frame, the patch page's step with the
     // real-time step (kept through a reset), whole vsyncs without it.
     double game = step_word ? step_now : (interval > 0 ? interval : 1) / 60.0;

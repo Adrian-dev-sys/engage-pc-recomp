@@ -137,21 +137,36 @@ static int g_vs_nctr;
 static volatile int64_t g_ticks;
 static volatile int64_t g_vs_start_ns;
 static int g_vs_started;
+static volatile uint64_t g_vs_hz = VSYNC_HZ, g_vs_base;
+
+// Engage (Unity) waits for one vsync per frame, so with the frame rate unlocked the event ticks at the frame limit.
+static uint64_t vsync_hz(void) {
+    if (!frame_step_unity_unlocked()) return VSYNC_HZ;
+    uint64_t hz = (VSYNC_NS + frame_step_cap_ns() / 2) / frame_step_cap_ns();
+    return hz < VSYNC_HZ ? VSYNC_HZ : hz;
+}
 
 static void vsync_main(void *arg) {
     (void)arg;
     plat_thread_priority(PLAT_PRIO_HIGHEST);
-    uint64_t n = 0;
+    uint64_t n = 0, base = 0;   // base: ticks before the current rate took over
     for (;;) {
-        uint64_t start = (uint64_t)g_vs_start_ns;
-        uint64_t due = start + (n + 1) * VSYNC_NS / VSYNC_HZ;
+        uint64_t hz = vsync_hz();
+        if (hz != g_vs_hz) {   // the rate changed: restart the schedule from now at the new rate
+            base = n;
+            g_vs_start_ns = (int64_t)kern_now_ns();
+            g_vs_hz = hz;
+        }
+        uint64_t start = (uint64_t)g_vs_start_ns, k = n - base;
+        uint64_t due = start + (k + 1) * VSYNC_NS / hz;
         uint64_t now = kern_now_ns();
         if (now > due + 100000000ull) {                  // the process stalled: restart the schedule, no catch-up burst
-            g_vs_start_ns = (int64_t)(now - (n + 1) * VSYNC_NS / VSYNC_HZ);
+            g_vs_start_ns = (int64_t)(now - (k + 1) * VSYNC_NS / hz);
         } else if (due > now) {
             plat_wait_ns(due - now);
         }
         n++;
+        g_vs_base = base;
         plat_xchg64(&g_ticks, (int64_t)n);
         uint64_t ev[16];
         volatile int32_t *ctr[4];
@@ -199,7 +214,10 @@ void gfx_vsync_bind_counter(volatile int32_t *counter) {
 }
 
 uint64_t gfx_vsync_ticks(void) { return (uint64_t)plat_cas64(&g_ticks, 0, 0); }
-uint64_t gfx_vsync_time_ns(uint64_t tick) { return (uint64_t)g_vs_start_ns + tick * VSYNC_NS / VSYNC_HZ; }
+uint64_t gfx_vsync_time_ns(uint64_t tick) {
+    uint64_t base = g_vs_base, hz = g_vs_hz;
+    return (uint64_t)g_vs_start_ns + (tick > base ? tick - base : 0) * VSYNC_NS / hz;
+}
 
 // ---- focus
 int gfx_window_focused(void) { return g_focused; }
