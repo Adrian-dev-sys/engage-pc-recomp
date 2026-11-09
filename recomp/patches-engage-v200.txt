@@ -271,3 +271,4 @@ hook cobalt_rub_effect main 22d7f80           # App.RingCleaning.EffectControlle
 hook cobalt_cleaning_start main 24172e0       # App.RingCleaningClothAnimationEvent::CleaningStartEvent(0): ring polish rumble
 hook cobalt_save_item main 1d66470            # App.SaveDataMenu.MenuItemContent::SetupByMenuItem(1): Phoenix saves labelled
 hook cobalt_engage_zone main 232e960          # App.GodData::GetEngageZonePrefabPath(1): zone remapped by nickname
+hook cobalt_demo_outfit main 1bb5f60         # App.AssetTable.Result::GetForDemo(3): F1 > Mods outfits in supports

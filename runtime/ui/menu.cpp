@@ -712,6 +712,7 @@ static void tab_mods(float scale) {
     opt_toggle("TOTK_COBALT_COMBAT_POPUPS", UI_MENU_COBALT_POPUPS, UI_MENU_COBALT_POPUPS_DESC);
     opt_toggle("TOTK_COBALT_COMBAT_UI", UI_MENU_COBALT_UI, UI_MENU_COBALT_UI_DESC);
     opt_toggle("TOTK_COBALT_RING_RUMBLE", UI_MENU_COBALT_RING, UI_MENU_COBALT_RING_DESC);
+    opt_toggle("TOTK_COBALT_SUPPORT_OUTFIT", UI_MENU_COBALT_OUTFIT, UI_MENU_COBALT_OUTFIT_DESC);
     int mode = cobalt_game_mode();   // the loaded save's; -1 before the game has one
     if (mode >= 0 && mode <= 2) {
         static const UiTextId names[] = {UI_MENU_COBALT_CASUAL, UI_MENU_COBALT_CLASSIC, UI_MENU_COBALT_PHOENIX};

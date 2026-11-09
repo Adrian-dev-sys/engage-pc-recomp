@@ -127,6 +127,14 @@ static int cleaning_start(Cpu *c) {   // RingCleaningClothAnimationEvent.Cleanin
     return 1;
 }
 
+// ---- AssetTable.Result.GetForDemo(pid, isDefault, isPlain) static: scenes such as supports ask for the default outfit;
+// with the switch on they get the one the character wears (Cobalt's support.rs).
+
+static int demo_outfit(Cpu *c) {
+    if (cfg_int("TOTK_COBALT_SUPPORT_OUTFIT")) c->x[1] = 0;
+    return 0;
+}
+
 // ---- save list: a Phoenix save says so (SaveDataMenu.MenuItemContent.SetupByMenuItem(this, item))
 
 static int save_item(Cpu *c) {
@@ -193,4 +201,5 @@ void cobalt_extras_init(void) {
     hook_install("cobalt_cleaning_start", cleaning_start);
     hook_install("cobalt_save_item", save_item);
     hook_install("cobalt_engage_zone", engage_zone);
+    hook_install("cobalt_demo_outfit", demo_outfit);
 }
