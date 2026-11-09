@@ -200,6 +200,9 @@ static uint64_t pack(unsigned w, unsigned h) { return (uint64_t)h << 32 | w; }
 // Render targets Engage sizes from asset data, not from the screen (the 640x1080 unit-info and talk character
 // models): their host images are enlarged by the render height / 1080 (vk_texture.c create_tex), so they get the
 // detail of the main scene. TOTK_RT_SCALE_SIZES lists the guest sizes ("640x1080,..."; "off" for none).
+static unsigned eng_w = BASE_W, eng_h = BASE_H;
+void res_engage_render_size(unsigned *w, unsigned *h) { *w = eng_w, *h = eng_h; }
+
 static float rt_k = 1.0f;
 static unsigned rt_sizes[8][2];
 static int rt_nsizes;
@@ -267,6 +270,7 @@ static void engage_res_init(void) {
     p[0] = w;
     p[1] = h;
     rt_patch_switch(set, 1);
+    eng_w = w, eng_h = h;
     rt_scale_init(h);
     rt_log("resolution: Engage renders at %ux%u (output %ux%u, render scale %.0f%%)", w, h, R.ow, R.oh, k * 100);
 }

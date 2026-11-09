@@ -27,6 +27,7 @@
 #include "nvn_hmap.h"
 #include "vk.h"
 #include "vk_exec.h"
+#include "vk_dlaa.h"
 #include "platform/platform.h"
 
 #define MAX_BINDINGS 128
@@ -1888,6 +1889,7 @@ static void record_fixed(VkExec *ex) {
         if (w < 1) w = 1;
         if (h < 1) h = 1;
         VkViewport v = {x, y + h, w, -h, ex->depth_range[0], ex->depth_range[1]};   // the y flip: negative height
+        vk_dlaa_viewport(ex, &v);   // the scene's sub-pixel jitter while DLAA runs
         vkCmdSetViewportWithCount(cb, 1, &v);
         ex->recorded++;
     }
@@ -2043,6 +2045,7 @@ static int prepare_draw(VkExec *ex, int prim, int32_t count, int restart) {
     }
     if (!ex->in_pass) ex->dirty |= VK_EXEC_DIRTY_VIEWPORT | VK_EXEC_DIRTY_SCISSOR;
     vk_exec_pass_begin(ex);
+    vk_dlaa_draw(ex);   // a scene draw's camera block
     VkRect2D sc = vk_exec_scissor(ex);
     if (!sc.extent.width || !sc.extent.height) return 0;
     if (!ex->prog) return warn_once(W_PROGRAM, "a draw without a bound program is skipped"), 0;

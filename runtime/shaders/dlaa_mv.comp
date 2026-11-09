@@ -1,0 +1,43 @@
+#version 450
+// Camera motion vectors for DLAA on Engage (vk_dlaa.c mv_pass): each pixel's depth is taken back to the world through
+// this frame's view-projection and forward through last frame's; the vector is last frame's window position minus this
+// frame's, in render pixels, without the jitter (DLSS's default convention). Objects that move on their own get only
+// the camera's motion.
+// The camera blocks are Unity's view-projection as Engage's scene vertex shaders read it (c3, 0x40 bytes): four vec4
+// columns, clip = M * world. The replay's viewports have negative heights, so window y grows downwards from ndc y = +1;
+// depth is z_ndc * 0.5 + 0.5 with the GL depth mode (pc.minus_w), else z_ndc.
+layout(local_size_x = 8, local_size_y = 8) in;
+layout(binding = 0) uniform sampler2D depth_tex;
+layout(binding = 1, rg16f) uniform writeonly image2D mv_out;
+layout(binding = 2, std140) uniform Cur { vec4 c[4]; } cur;
+layout(binding = 3, std140) uniform Prev { vec4 c[4]; } prev;
+layout(push_constant) uniform P {
+    vec2 size;      // render size in pixels
+    vec2 jitter;    // this frame's jitter, pixels, as the scene was drawn (window x right, y down)
+    float minus_w;  // 1: GL depth mode (near at -w)
+    float flip_y;   // 1: ndc y grows downwards (test knob TOTK_DLAA_FLIPY)
+} pc;
+
+void main() {
+    ivec2 p = ivec2(gl_GlobalInvocationID.xy);
+    if (p.x >= int(pc.size.x) || p.y >= int(pc.size.y)) return;
+    float d = texelFetch(depth_tex, p, 0).r;
+    vec2 win = vec2(p) + 0.5 - pc.jitter;   // where this pixel's surface sits without the jitter
+    float ny = 1.0 - win.y / pc.size.y * 2.0;
+    if (pc.flip_y > 0.5) ny = -ny;
+    vec4 ndc = vec4(win.x / pc.size.x * 2.0 - 1.0, ny, pc.minus_w > 0.5 ? d * 2.0 - 1.0 : d, 1.0);
+    mat4 c = mat4(cur.c[0], cur.c[1], cur.c[2], cur.c[3]);
+    mat4 q = mat4(prev.c[0], prev.c[1], prev.c[2], prev.c[3]);
+    vec4 world = inverse(c) * ndc;
+    vec2 mv = vec2(0.0);
+    if (abs(world.w) > 1e-12) {
+        vec4 clip = q * (world / world.w);
+        if (abs(clip.w) > 1e-6) {
+            vec2 pn = clip.xy / clip.w;
+            if (pc.flip_y > 0.5) pn.y = -pn.y;
+            vec2 pwin = vec2((pn.x * 0.5 + 0.5) * pc.size.x, (0.5 - pn.y * 0.5) * pc.size.y);
+            mv = pwin - win;
+        }
+    }
+    imageStore(mv_out, p, vec4(mv, 0.0, 0.0));
+}

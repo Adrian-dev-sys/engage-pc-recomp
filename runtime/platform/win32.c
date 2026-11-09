@@ -1458,3 +1458,23 @@ long plat_child_read(PlatChild *c, void *buf, size_t cap) {
     if (!ReadFile(c->out, buf, (DWORD)cap, &got, NULL)) return -1;
     return (long)got;
 }
+
+// ---- NGX (vk_dlaa.c); from TotK Recomp 0.3.13 platform/win32.c (MIT)
+int plat_ngx_core_path(char *out, size_t cap) {
+    wchar_t dir[WPATH];
+    DWORD n = sizeof dir;
+    char d[PLAT_PATH_MAX];
+    if (RegGetValueW(HKEY_LOCAL_MACHINE, L"SOFTWARE\\NVIDIA Corporation\\Global\\NGXCore", L"FullPath", RRF_RT_REG_SZ,
+                     NULL, dir, &n) != ERROR_SUCCESS ||
+        !WideCharToMultiByte(CP_UTF8, 0, dir, -1, d, (int)sizeof d, NULL, NULL))
+        return 0;
+    return snprintf(out, cap, "%s\\_nvngx.dll", d) < (int)cap;
+}
+
+int plat_exe_dir_wide(wchar_t *out, size_t cap) {
+    DWORD len = GetModuleFileNameW(NULL, out, (DWORD)cap);
+    if (!len || len >= cap) return 0;
+    while (len && out[len - 1] != L'\\' && out[len - 1] != L'/') len--;
+    out[len] = 0;
+    return len != 0;
+}

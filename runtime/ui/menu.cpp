@@ -42,6 +42,8 @@ extern "C" {
 #include "sysinfo.h"
 #include "ui/menu.h"
 #include "ui_text.h"
+
+extern "C" const int rt_game_id;   // host.h: 0 TotK, 1 Engage
 // host.h and vk.h pull in cpu.h, which is C only: the functions the menu needs from them, as declared there.
 void rt_log(const char *fmt, ...) __attribute__((format(printf, 1, 2)));
 void vk_queue_lock(void);
@@ -631,6 +633,14 @@ static void tab_screen(float scale) {
     opt_choice("TOTK_ASPECT", UI_MENU_ASPECT, aspect, 2, UI_MENU_ASPECT_DESC);
     opt_slider("TOTK_FOV", UI_MENU_FOV, 70, 140, UI_MENU_FOV_DESC, 5, "%.0f %%");
     rows_color();
+    if (rt_game_id == 1) {   // Engage: vk_dlaa.c, resolution.c res_rt_scale
+        opt_group(UI_MENU_AA);
+        opt_toggle("TOTK_DLAA", UI_MENU_DLAA, UI_MENU_DLAA_DESC);
+        static const UiTextId preset[] = {UI_MENU_DLSS_PRESET_DEFAULT, UI_MENU_DLSS_PRESET_K, UI_MENU_DLSS_PRESET_J,
+                                          UI_MENU_DLSS_PRESET_E};
+        opt_choice("TOTK_DLSS_PRESET", UI_MENU_DLSS_PRESET, preset, 4, UI_MENU_DLSS_PRESET_DESC);
+        opt_slider("TOTK_RT_SUPERSAMPLE", UI_MENU_RT_SUPERSAMPLE, 1, 4, UI_MENU_RT_SUPERSAMPLE_DESC, 1, "%.0fx");
+    }
     opt_end();
 }
 

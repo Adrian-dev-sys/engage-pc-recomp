@@ -2,6 +2,7 @@
 // per OS (win32.c, linux.c). The FP control register lives in the per-architecture fp_*.h headers, inline, because
 // lifted FP code touches it on every operation.
 #pragma once
+#include <wchar.h>
 #include <stddef.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -360,6 +361,10 @@ int plat_open_folder(const char *path);                   // shows the folder in
 // ---- dynamic libraries: a library some machines lack (a GPU vendor's), loaded at run time. A bare name is searched
 // in the system directories only. NULL when missing.
 void *plat_lib_open(const char *name);
+// The driver's NGX core library (HKLM NVIDIA NGXCore FullPath + _nvngx.dll); 0 when the driver has none (vk_dlaa.c).
+int plat_ngx_core_path(char *out, size_t cap);
+// The executable's folder as a wide string with a trailing separator (NGX's application data path).
+int plat_exe_dir_wide(wchar_t *out, size_t cap);
 void *plat_lib_sym(void *lib, const char *name);
 
 // ---- machine load for the performance overlay (perfmon.c's sampling thread; each call can take milliseconds). A number
