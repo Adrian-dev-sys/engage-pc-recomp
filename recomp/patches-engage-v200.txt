@@ -250,3 +250,5 @@ hook cobalt_load_system_voice main 228e850     # App.GameSound::LoadSystemVoice(
 hook cobalt_unload_system_voice main 228ea70   # App.GameSound::UnloadSystemVoice(1)
 hook cobalt_map_opening main 24e46d0          # App.EventSequence::MapOpening(1): root .lua scripts (runtime/cobalt_lua.c)
 hook cobalt_script_log main 1ed8190          # App.ScriptSystem::Log(1): empty in the game; Lua Log() goes to our log
+hook cobalt_regist_action main 24e2430        # App.EventScript::RegistAction(2): a game action's delegate as template
+hook cobalt_eventscript_load main 24e2620     # App.EventScript::LoadImpl(1): Cobalt's Lua functions after the game's
