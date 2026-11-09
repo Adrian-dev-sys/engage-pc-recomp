@@ -191,7 +191,7 @@ static const char *const text_en[UI_TEXT_COUNT] = {
 
     [UI_MENU_VOLUME] = "Volume", [UI_MENU_VOLUME_DESC] = "Master volume of the game.",
 
-    [UI_MENU_MOTION] = "Motion controls", [UI_MENU_MOTION_DESC] = "Aiming with the controller's gyroscope.",
+    [UI_MENU_MOTION] = "Motion controls", [UI_MENU_MOTION_DESC] = "The controller's gyroscope, where the game uses motion (aiming, tilting the camera).",
     [UI_MENU_RUMBLE_STRENGTH] = "Vibration strength",
     [UI_MENU_RUMBLE_STRENGTH_DESC] = "How strong the controller vibrates.",
     [UI_MENU_RUMBLE_CURVE] = "Vibration curve",
@@ -451,7 +451,7 @@ static const char *const text_ru[UI_TEXT_COUNT] = {
 
     [UI_MENU_VOLUME] = "Громкость", [UI_MENU_VOLUME_DESC] = "Общая громкость игры.",
 
-    [UI_MENU_MOTION] = "Управление движением", [UI_MENU_MOTION_DESC] = "Прицеливание гироскопом контроллера.",
+    [UI_MENU_MOTION] = "Управление движением", [UI_MENU_MOTION_DESC] = "Гироскоп контроллера там, где игра использует движение (прицеливание, наклон камеры).",
     [UI_MENU_RUMBLE_STRENGTH] = "Сила вибрации",
     [UI_MENU_RUMBLE_STRENGTH_DESC] = "Насколько сильно вибрирует контроллер.",
     [UI_MENU_RUMBLE_CURVE] = "Кривая вибрации",

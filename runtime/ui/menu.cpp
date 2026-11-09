@@ -650,7 +650,8 @@ static void tab_screen(float scale) {
     opt_slider("TOTK_SHARPNESS", UI_MENU_SHARPNESS, 0, 100, UI_MENU_SHARPNESS_DESC, 5, "%.0f %%");
     static const UiTextId aspect[] = {UI_MENU_ASPECT_FIT, UI_MENU_ASPECT_STRETCH};
     opt_choice("TOTK_ASPECT", UI_MENU_ASPECT, aspect, 2, UI_MENU_ASPECT_DESC);
-    opt_slider("TOTK_FOV", UI_MENU_FOV, 70, 140, UI_MENU_FOV_DESC, 5, "%.0f %%");
+    if (rt_game_id != 1)   // TotK 1.4.3's set fov; Engage has its own wide view (Ultrawide)
+        opt_slider("TOTK_FOV", UI_MENU_FOV, 70, 140, UI_MENU_FOV_DESC, 5, "%.0f %%");
     rows_color();
     if (rt_game_id == 1) {   // Engage: vk_dlaa.c, resolution.c res_rt_scale
         opt_group(UI_MENU_AA);
@@ -740,9 +741,11 @@ static void tab_game(float scale) {
     opt_begin("##game", scale);
     row_playtime();
     row_fps_limit();
-    opt_toggle("TOTK_REALTIME", UI_MENU_REALTIME, UI_MENU_REALTIME_DESC);
-    opt_toggle("TOTK_CLOTH_REALTIME", UI_MENU_CLOTH_REALTIME, UI_MENU_CLOTH_REALTIME_DESC);
-    opt_toggle("TOTK_HIGHFPS_FIX", UI_MENU_HIGHFPS_FIX, UI_MENU_HIGHFPS_FIX_DESC);
+    if (rt_game_id != 1) {   // TotK patch sets (realtime, cloth, bounce, fade); Engage's frame rate is set fps60
+        opt_toggle("TOTK_REALTIME", UI_MENU_REALTIME, UI_MENU_REALTIME_DESC);
+        opt_toggle("TOTK_CLOTH_REALTIME", UI_MENU_CLOTH_REALTIME, UI_MENU_CLOTH_REALTIME_DESC);
+        opt_toggle("TOTK_HIGHFPS_FIX", UI_MENU_HIGHFPS_FIX, UI_MENU_HIGHFPS_FIX_DESC);
+    }
     row_game_lang();
     static const UiTextId mode[] = {UI_MENU_MODE_DOCKED, UI_MENU_MODE_HANDHELD};
     opt_choice("TOTK_OPERATION_MODE", UI_MENU_OPERATION_MODE, mode, 2, UI_MENU_OPERATION_MODE_DESC);
@@ -884,7 +887,8 @@ static void tab_advanced(float scale) {
     opt_toggle("TOTK_ASTC_BC", UI_MENU_ASTC_BC, UI_MENU_ASTC_BC_DESC);
 
     opt_group(UI_MENU_GROUP_FIXES);
-    opt_toggle("TOTK_LOD_GUARD", UI_MENU_LOD_GUARD, UI_MENU_LOD_GUARD_DESC);
+    if (rt_game_id != 1)   // waits at a TotK call site only (nvn_api_core.c)
+        opt_toggle("TOTK_LOD_GUARD", UI_MENU_LOD_GUARD, UI_MENU_LOD_GUARD_DESC);
     opt_toggle("TOTK_FIX_C0", UI_MENU_FIX_C0, UI_MENU_FIX_C0_DESC);
     opt_toggle("TOTK_FIX_ZERO", UI_MENU_FIX_ZERO, UI_MENU_FIX_ZERO_DESC);
     opt_toggle("TOTK_BIND_SKIP", UI_MENU_BIND_SKIP, UI_MENU_BIND_SKIP_DESC);
