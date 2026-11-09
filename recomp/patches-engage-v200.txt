@@ -90,6 +90,10 @@ site fps60 main 2d7ce34 1e2202a2 @page:x8 bd404102   # scvtf s2, w21: vSyncCount
 site fps60 main 2d7d890 1e2202a2 @page:x8 bd404102   # scvtf s2, w21: vSyncCount as 60/rate (x8 dead here)
 site fps60 main 2dc5a9c 1e2202a2 @page:x8 bd404102   # scvtf s2, w21: vSyncCount as 60/rate (x8 dead here)
 
+# App.GameTime.get_VsyncDeltaCount/Time round the real frame time to whole 1/60 s vsyncs (0.5 -> 1 at 120 fps,
+# 0.35 -> 0 at 170 fps): the count becomes the whole steps of page+0x4c, the time the exact page+0x40 / 60.
+site fps60 main 250ceb0 a9bf7bfd @page:x0 b9404c00 d65f03c0   # GameTime.get_VsyncDeltaCount: whole vsyncs this frame
+site fps60 main 250cf90 1e220100 @page:x8 bd404100   # GameTime.get_VsyncDeltaTime: scvtf s0, w8 -> exact vsyncs (x8 rewritten next)
 # Resolution: Unity's 1920x1080 screen size, swapchain textures and size cap read page+0x50 (width) and +0x54
 # (height), written by runtime/resolution.c engage_res_init from output_res * render_scale. On when not 1920x1080.
 set engres TOTK_ENGAGE_RES 0
