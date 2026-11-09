@@ -222,8 +222,27 @@ static void rt_scale_init(unsigned render_h) {
         if (!p) break;
         p++;
     }
-    rt_k = rt_nsizes && render_h > BASE_H ? (float)render_h / BASE_H : 1.0f;
-    if (rt_k > 1.0f) rt_log("resolution: render targets %s drawn at %.3fx their size", s, rt_k);
+    // TOTK_RT_SUPERSAMPLE (1..4, default 2): extra factor; the models are drawn without anti-aliasing, so the UI's
+    // filtered downscale of a larger image smooths their edges
+    const char *ss = cfg_get("TOTK_RT_SUPERSAMPLE");
+    double sup = ss && *ss ? strtod(ss, NULL) : 2.0;
+    if (!(sup >= 1.0 && sup <= 4.0)) sup = 2.0;
+    double k = (render_h > BASE_H ? (double)render_h / BASE_H : 1.0) * sup;
+    for (int i = 0; i < rt_nsizes; i++)   // host images stay within 8192 per side
+        if (rt_sizes[i][0] * k > 8192 || rt_sizes[i][1] * k > 8192) k = fmin(8192.0 / rt_sizes[i][0], 8192.0 / rt_sizes[i][1]);
+    rt_k = rt_nsizes ? (float)k : 1.0f;
+    if (rt_k > 1.0f) rt_log("resolution: render targets %s drawn at %.3fx their size (supersample %.2f)", s, rt_k, sup);
+}
+
+// Engage: logs each new size of a colour render target once (TOTK_RT_SCALE_SIZES candidates); w, h are guest sizes.
+void res_rt_seen(unsigned w, unsigned h, int fmt) {
+    static unsigned seen[64][2];
+    static int n;
+    if (!RT_ENGAGE) return;
+    for (int i = 0; i < n; i++)
+        if (seen[i][0] == w && seen[i][1] == h) return;
+    if (n < 64) seen[n][0] = w, seen[n++][1] = h;
+    rt_log("resolution: render target %ux%u (format %#x)%s", w, h, fmt, res_rt_scale(w, h) > 1.0f ? ", scaled" : "");
 }
 
 static void engage_res_init(void) {
