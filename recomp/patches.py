@@ -8,6 +8,8 @@ Lifted code cannot be byte-patched when the game runs, so a patch is applied whe
 
   spin <module> <head> <back-edge> [<back-edge> ...]
 
+  hook <name> <module> <address>             a host hook at the start of the guest function at <address>
+
 <address> is a module offset (hex), <original> the instruction word the module has there (checked; a mismatch stops
 the generator), each <replacement> an instruction word (hex) or `@page:x<n>`, which is `adrp x<n>, <patch page>`
 encoded for the site's address. The patch page is the first 4 KiB page after main's image (layout.py leaves the rest
@@ -27,6 +29,11 @@ A `spin` line names a spin wait found by tools/spin_waits.py: a loop with head <
 and the direct branches back to it (module offsets). Each back-edge (checked: a b, b.cond, cbz / cbnz or tbz / tbnz to
 <head>) is lifted as `rt_spin_gate(c, <head>); goto <head>`, which keeps every register and only adds time
 (runtime/kernel.c kern_spin_gate).
+
+A `hook` line names a function start (checked against discovery). Its lifted function begins with
+`if (rt_hook_on[<k>] && rt_hook_enter(c, <k>)) return;` (not when a landing pad resumes it): the runtime's host function
+for <name> (runtime/hooks.c) sees the arguments in x0..x7, and either handles the call (sets x0, returns 1: the guest
+function returns at once) or lets it run (returns 0). The header lists the hooks as RT_HOOKS(X).
 """
 from pathlib import Path
 
@@ -48,7 +55,8 @@ def adrp(pc, target, rd):
 class Table:
     """sets: [(name, env, default)]; sites: {module: {offset: (set index, [word | ('page', reg)], original)}}; page."""
 
-    def __init__(self, sets=(), sites=None, page=0, spins=None):
+    def __init__(self, sets=(), sites=None, page=0, spins=None, hooks=None):
+        self.hooks = hooks or []   # [(name, module, offset)]
         self.sets = list(sets)
         self.sites = sites or {}
         self.page = page
@@ -57,6 +65,10 @@ class Table:
     def spins_for(self, name, base):
         """{absolute back-edge address: absolute head address}."""
         return {base + b: base + h for b, h in self.spins.get(name, {}).items()}
+
+    def hooks_for(self, name, base):
+        """{absolute function start: hook index}."""
+        return {base + off: k for k, (_, mod, off) in enumerate(self.hooks) if mod == name}
 
     def for_module(self, name, base):
         """{absolute address: (set index, [words])} with @page resolved."""
@@ -69,7 +81,7 @@ class Table:
 
 def load(path, mods):
     """Table from a patch file; mods is layout() output [(name, base, size)]."""
-    sets, index, sites, spins = [], {}, {}, {}
+    sets, index, sites, spins, hooks = [], {}, {}, {}, []
     bases = {n: (b, s) for n, b, s in mods}
     for no, raw in enumerate(Path(path).read_text().splitlines(), 1):
         f = raw.split('#', 1)[0].split()
@@ -97,6 +109,12 @@ def load(path, mods):
             if off in mod:
                 raise PatchError(f'{where}: {f[2]}+{off:#x} patched twice')
             mod[off] = (index[f[1]], repl, orig)
+        elif f[0] == 'hook' and len(f) == 4:
+            if f[2] not in bases:
+                raise PatchError(f'{where}: module {f[2]} not in the layout')
+            if any(h[0] == f[1] for h in hooks) or any(h[1:] == (f[2], int(f[3], 16)) for h in hooks):
+                raise PatchError(f'{where}: hook {f[1]} defined twice')
+            hooks.append((f[1], f[2], int(f[3], 16)))
         elif f[0] == 'spin' and len(f) >= 4:
             if f[1] not in bases:
                 raise PatchError(f'{where}: module {f[1]} not in the layout')
@@ -113,7 +131,14 @@ def load(path, mods):
     nxt = min((b for _, b, _ in mods if b > base), default=None)
     if nxt is not None and page + PAGE > nxt:
         raise PatchError(f'no room for the patch page after main ({page:#x})')
-    return Table(sets, sites, page, spins)
+    return Table(sets, sites, page, spins, hooks)
+
+
+def check_hooks(table, name, base, starts):
+    """Stops on a hook that is not at a discovered function start."""
+    for hn, mod, off in table.hooks:
+        if mod == name and base + off not in starts:
+            raise PatchError(f'hook {hn}: {name}+{off:#x} is not a function start')
 
 
 def check(table, mod, name):
@@ -148,5 +173,9 @@ def header_text(table, marker):
              f'#define RT_PATCH_PAGE {table.page:#x}ull',
              '// X(index, name, env switch, default)',
              '#define RT_PATCH_SETS(X) ' + ' '.join(f'X({i}, {n}, "{e}", {d})' for i, (n, e, d) in
-                                                    enumerate(table.sets)), '']
+                                                    enumerate(table.sets)), '',
+             f'#define RT_HOOK_COUNT {len(table.hooks)}',
+             '// X(index, name, module, offset)',
+             '#define RT_HOOKS(X) ' + ' '.join(f'X({i}, {n}, {m}, {o:#x})' for i, (n, m, o) in
+                                               enumerate(table.hooks)), '']
     return '\n'.join(lines)

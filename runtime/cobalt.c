@@ -17,7 +17,9 @@
 #include <strings.h>
 
 #include "cobalt.h"
+#include "cobalt_voice.h"
 #include "fs.h"
+#include "hooks.h"
 #include "host.h"
 #include "mods.h"
 #include "platform/platform.h"
@@ -29,7 +31,7 @@
 #define BUNDLE_DIR SA "/aa/Switch"
 #define CATALOG SA "/aa/catalog.bundle"
 #define RT "{UnityEngine.AddressableAssets.Addressables.RuntimePath}/Switch/"
-#define BAKE_VERSION "cobalt-bake 1\n"
+#define BAKE_VERSION "cobalt-bake 2\n"
 #define MAX_COBALT 512
 
 static char cache_dir[2048];
@@ -1264,6 +1266,207 @@ static void bake_msbt(void) {
     free(files.v), free(targets);
 }
 
+// ======== unbundled Lua scripts: patches/scripts/<name>[.txt] replaces fe_assets_scripts/<name>.txt.bundle
+typedef struct { char rel[512], file[2600]; } Script;
+typedef struct { Script v[2048]; int n; } Scripts;
+
+static void script_cb(const char *file, const char *rel, uint64_t size, void *ctx) {
+    (void)size;
+    Scripts *l = ctx;
+    char lo[512];
+    lower_copy(lo, rel, sizeof lo);
+    if (ends_ci(lo, ".txt") || ends_ci(lo, ".lua")) lo[strlen(lo) - 4] = 0;
+    for (int i = 0; i < l->n; i++)   // a higher mod (walked later) wins
+        if (!strcmp(l->v[i].rel, lo)) {
+            snprintf(l->v[i].file, sizeof l->v[i].file, "%s", file);
+            return;
+        }
+    if (l->n < (int)(sizeof l->v / sizeof *l->v)) {
+        snprintf(l->v[l->n].rel, sizeof l->v->rel, "%s", lo);
+        snprintf(l->v[l->n++].file, sizeof l->v->file, "%s", file);
+    }
+}
+
+static void bake_scripts(void) {
+    Scripts *l = calloc(1, sizeof *l);
+    if (!l) return;
+    for (int i = 0; i < norder; i++) {
+        char d[2200];
+        mod_sub(order[i], "patches/scripts", d, sizeof d);
+        walk(d, "", script_cb, l);
+    }
+    int done = 0;
+    for (int i = 0; i < l->n; i++) {
+        char rom[700];
+        snprintf(rom, sizeof rom, BUNDLE_DIR "/fe_assets_scripts/%s.txt.bundle", l->v[i].rel);
+        if (!romfs_base_exists(rom)) {
+            rt_log("cobalt: scripts: the game has no %s; %s left out", rom, l->v[i].file);
+            continue;
+        }
+        TextBundle tb;
+        uint64_t n = 0;
+        uint8_t *t = plat_file_read(l->v[i].file, &n);
+        if (t && tb_open(rom, &tb)) {
+            if (tb_write(&tb, rom, t, n)) done++;
+            tb_free(&tb);
+        }
+        free(t);
+    }
+    if (l->n) rt_log("cobalt: scripts: %d of %d replaced", done, l->n);
+    free(l);
+}
+
+// ======== config.yaml: a mod's id and the ids it depends on, which must apply before it
+typedef struct { char id[128]; char deps[32][128]; int ndeps; int optional[32]; } ModCfg;
+
+static void read_config(int k, ModCfg *c) {
+    memset(c, 0, sizeof *c);
+    char path[2200];
+    mod_sub(k, "config.yaml", path, sizeof path);
+    uint64_t n = 0;
+    char *t = (char *)plat_file_read(path, &n);
+    if (!t) return;
+    int list = 0;   // 1 dependencies, 2 optional_dependencies
+    for (char *line = t, *end = t + n; line < end;) {
+        char *nl = memchr(line, '\n', (size_t)(end - line));
+        size_t len = nl ? (size_t)(nl - line) : (size_t)(end - line);
+        char buf[512];
+        snprintf(buf, sizeof buf, "%.*s", (int)(len < 511 ? len : 511), line);
+        char *cr = strchr(buf, '\r'), *hash = strchr(buf, '#');
+        if (cr) *cr = 0;
+        if (hash) *hash = 0;
+        char *p = buf;
+        int indented = *p == ' ' || *p == '\t';
+        while (*p == ' ' || *p == '\t') p++;
+        if (*p == '-' && list) {
+            p++;
+            while (*p == ' ') p++;
+            if (!strncmp(p, "id:", 3)) p += 3;
+            while (*p == ' ' || *p == '"' || *p == '\'') p++;
+            char *e = p + strlen(p);
+            while (e > p && (e[-1] == ' ' || e[-1] == '"' || e[-1] == '\'')) *--e = 0;
+            if (*p && c->ndeps < 32) c->optional[c->ndeps] = list == 2, snprintf(c->deps[c->ndeps++], 128, "%s", p);
+        } else if (!indented && *p) {
+            list = !strncmp(p, "dependencies:", 13) ? 1 : !strncmp(p, "optional_dependencies:", 22) ? 2 : 0;
+            if (!strncmp(p, "id:", 3)) {
+                p += 3;
+                while (*p == ' ' || *p == '"' || *p == '\'') p++;
+                char *e = p + strlen(p);
+                while (e > p && (e[-1] == ' ' || e[-1] == '"' || e[-1] == '\'')) *--e = 0;
+                snprintf(c->id, sizeof c->id, "%s", p);
+            }
+        }
+        line = nl ? nl + 1 : end;
+    }
+    free(t);
+}
+
+// Moves each mod's dependencies before it in order[] (applied first, so the dependent mod's changes win).
+static void order_by_dependencies(void) {
+    static ModCfg cfg[MAX_COBALT];
+    for (int i = 0; i < norder; i++) read_config(order[i], &cfg[i]);
+    for (int pass = 0; pass < norder; pass++) {
+        int moved = 0;
+        for (int i = 0; i < norder && !moved; i++)
+            for (int d = 0; d < cfg[i].ndeps && !moved; d++) {
+                int j = 0;
+                while (j < norder && strcmp(cfg[j].id, cfg[i].deps[d])) j++;
+                if (j == norder) {
+                    if (!pass && !cfg[i].optional[d])
+                        rt_log("cobalt: %s needs the mod %s, which is not installed or is off", mods_at(order[i])->name,
+                               cfg[i].deps[d]);
+                    continue;
+                }
+                if (j > i) {   // the dependency applies after its user: move it just before
+                    int o = order[j];
+                    ModCfg c = cfg[j];
+                    memmove(order + i + 1, order + i, sizeof *order * (size_t)(j - i));
+                    memmove(cfg + i + 1, cfg + i, sizeof *cfg * (size_t)(j - i));
+                    order[i] = o, cfg[i] = c, moved = 1;
+                }
+            }
+        if (!moved) break;
+    }
+}
+
+// ======== new Wwise banks: loaded just before the game's default banks, as Cobalt's load_default_sound_banks does
+// (it puts them first in GameSound's default bank list). Hooks (recomp/patches-engage-v200.txt): cobalt_default_banks
+// on GameSound's default bank loader, cobalt_load_bank on SoundManager's LoadBank(this, name, method).
+#define AUDIO_DIR SA "/Audio/GeneratedSoundBanks/Switch"
+static char banks[64][128];
+static int nbanks;
+static volatile int32_t banks_pending;
+
+static void bank_cb(const char *file, const char *rel, uint64_t size, void *ctx) {
+    (void)file, (void)size;
+    Map *base = ctx;
+    const char *leaf = strrchr(rel, '/');
+    leaf = leaf ? leaf + 1 : rel;
+    if (!ends_ci(leaf, ".bnk") || nbanks == (int)(sizeof banks / sizeof *banks)) return;
+    char stem[128], lo[128];
+    snprintf(stem, sizeof stem, "%.*s", (int)(strlen(leaf) - 4), leaf);
+    lower_copy(lo, stem, sizeof lo);
+    if (map_get(base, lo)) return;   // replaces a game bank: the game loads it already
+    for (int i = 0; i < nbanks; i++)
+        if (!strcasecmp(banks[i], stem)) return;
+    snprintf(banks[nbanks++], sizeof *banks, "%s", stem);
+}
+
+// An Il2CppString in host memory (never freed): klass, monitor, length, UTF-16 characters.
+static uint64_t il2cpp_string(uint64_t klass, const char *s) {
+    size_t n = strlen(s);
+    uint8_t *o = calloc(1, 0x14 + 2 * (n + 1));
+    if (!o) return 0;
+    memcpy(o, &klass, 8);
+    int32_t len = (int32_t)n;
+    memcpy(o + 0x10, &len, 4);
+    for (size_t i = 0; i < n; i++) o[0x14 + 2 * i] = (uint8_t)s[i];
+    return (uint64_t)(uintptr_t)o;
+}
+
+static int hook_default_banks(Cpu *c) {
+    (void)c;
+    if (nbanks) plat_xchg32(&banks_pending, 1);
+    return 0;
+}
+
+static int hook_load_bank(Cpu *c) {
+    if (!plat_xchg32(&banks_pending, 0) || !c->x[1]) return 0;
+    uint64_t self = c->x[0], klass = *(const uint64_t *)(uintptr_t)c->x[1];   // a game string's class
+    for (int i = 0; i < nbanks; i++) {
+        uint64_t s = il2cpp_string(klass, banks[i]);
+        if (!s) continue;
+        hook_original(c, "cobalt_load_bank", self, s, 0, 0);
+        rt_log("cobalt: sound bank %s loaded before the game's default banks", banks[i]);
+    }
+    return 0;   // then the game's own first bank
+}
+
+static void audio_init(void) {
+    Map base = {0};
+    size_t pre = strlen(AUDIO_DIR "/");
+    for (uint64_t r = 0; r < romfs_file_count(); r++) {
+        const char *name = romfs_entry(r, NULL, NULL);
+        if (strncmp(name, AUDIO_DIR "/", pre) || !ends_ci(name, ".bnk")) continue;
+        const char *leaf = strrchr(name, '/') + 1;
+        char lo[128];
+        lower_copy(lo, leaf, sizeof lo);
+        lo[strlen(lo) - 4] = 0;
+        map_put(&base, lo, "1");
+    }
+    nbanks = 0;
+    for (int i = 0; i < norder; i++) {
+        char d[2200];
+        mod_sub(order[i], AUDIO_DIR, d, sizeof d);
+        walk(d, "", bank_cb, &base);
+    }
+    map_free(&base);
+    if (!nbanks) return;
+    if (hook_install("cobalt_default_banks", hook_default_banks) && hook_install("cobalt_load_bank", hook_load_bank))
+        rt_log("cobalt: %d new sound bank(s) to load", nbanks);
+    cobalt_voice_init();
+}
+
 // ======== the cache and the start
 static void digest_cb(const char *file, const char *rel, uint64_t size, void *ctx) {
     Sha256 *h = ctx;
@@ -1287,6 +1490,8 @@ static void key_of(char hex[65]) {
         sha256_update(&h, m->name, strlen(m->name) + 1);
         mod_sub(order[i], "patches", d, sizeof d);
         walk(d, "", digest_cb, &h);
+        mod_sub(order[i], "config.yaml", d, sizeof d);
+        if (plat_file_exists(d)) digest_cb(d, "config.yaml", (uint64_t)plat_file_size(d), &h);
     }
     uint8_t md[32];
     sha256_final(&h, md);
@@ -1308,6 +1513,7 @@ void cobalt_bake(void) {
         if (m->enabled && (m->kind & MOD_COBALT) && m->problem == MOD_OK) order[norder++] = k;
     }
     if (!norder) return;
+    order_by_dependencies();
     snprintf(cache_dir, sizeof cache_dir, "%s/cobalt", rt_config()->profile);
     plat_file_mkdir_p(cache_dir);
     char key[65], manifest[2200];
@@ -1332,6 +1538,7 @@ void cobalt_bake(void) {
         if (ok) {
             rt_log("cobalt: %d mod(s), %d merged file(s) from the cache (%s)", norder, noutputs, cache_dir);
             register_outputs();
+            audio_init();
             return;
         }
     } else {
@@ -1342,6 +1549,7 @@ void cobalt_bake(void) {
     bake_catalog();
     bake_xml();
     bake_msbt();
+    bake_scripts();
     Buf m = {0};
     buf_add(&m, key, 64), buf_add(&m, "\n", 1);
     for (int i = 0; i < noutputs; i++) buf_str(&m, outputs[i]), buf_add(&m, "\n", 1);
@@ -1350,4 +1558,5 @@ void cobalt_bake(void) {
     rt_log("cobalt: %d mod(s) merged into %d file(s) in %.1f s (%s)", norder, noutputs,
            (double)plat_now_ns() / 1e9 - t0, cache_dir);
     register_outputs();
+    audio_init();
 }

@@ -45,10 +45,24 @@ other mods leave it (another mod's message file, for example). The result is cac
 (`merged.txt` holds the key: every served mod file's size and time, the order and every patch file), so later starts
 take no time; the first one lists the game's bundle CAB names once (`profile\cobalt\cabs.txt`, about 3 s).
 
-Not supported yet: `.nro` code plugins (logged; the mod's data still loads), root-level `.lua` scripts and Cobalt's
-Lua functions, `.ips` patches, new Wwise sound banks (a `.bnk` with a new name is not loaded; replaced `.wem` files
-are), config.yaml dependencies (the F1 > Mods order decides), Cobalt's table expansions (AssetTable beyond the game's
-capacity, more than 4096 skills).
+- `patches\scripts\<name>.txt`: replaces the game's Lua script `fe_assets_scripts/<name>.txt.bundle` (no merging; the
+  top mod wins).
+- New Wwise banks (`Data\StreamingAssets\Audio\GeneratedSoundBanks\Switch\...\<Name>.bnk` with a name the game does
+  not have) load just before the game's default banks, so their events take precedence, as in Cobalt (`audio_init`,
+  hooks `cobalt_default_banks` / `cobalt_load_bank`). Replaced `.wem` / `.bnk` files are plain overlays.
+- `config.yaml` `dependencies` / `optional_dependencies`: a mod is merged after the mods it depends on; a missing
+  hard dependency is logged.
+- Cobalt's binary patches are built in (patch set `cobalt`, `TOTK_COBALT_PATCHES`, on): larger AssetTable and skill
+  tables, the DragonAttributeCommand fix.
 
-Code: `runtime/cobalt.c` (merge, cache), `runtime/unityfs.c` (bundles, LZ4, LZMA), `runtime/mods.c` `cobalt_layout`,
+Not supported yet: Cobalt's voice handling (`CobaltEvent:` markers in `.wem` files, `Voice="Mod!Fallback"`), root-level
+`.lua` scripts and Cobalt's Lua functions, `patches\xml\Support.xml`, custom sprites (`patches\icon`, `patches\ui`).
+Not possible: `.nro` code plugins and `.ips` code patches (logged; the mod's data still loads). They change ARM64
+code, which the recompiled game does not have at run time.
+
+Hooks: a `hook <name> main <offset>` line in `recomp/patches-engage-v200.txt` makes that lifted function call
+`runtime/hooks.c` first (regenerate with gen.py). `tools/il2cpp_map.py --find <Class::Method>` prints a managed
+method's offset (from `build/engage-v200/il2cpp-methods.tsv`).
+
+Code: `runtime/cobalt.c` (merge, cache, banks), `runtime/hooks.c`, `runtime/unityfs.c` (bundles, LZ4, LZMA), `runtime/mods.c` `cobalt_layout`,
 `runtime/romfs.c` (`romfs_base_read`, `romfs_cobalt_overlay`, `COBALT_PRIO`).
