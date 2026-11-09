@@ -301,9 +301,11 @@ static void ov_result_ok(Cpu *c) { ret_x(c, 0); }   // RequestImmediateTransmiss
 static volatile int32_t nfp_state;
 static volatile uint64_t nfp_activate_ev, nfp_deactivate_ev;
 
+// Only while the game detects: after StopDetection / Finalize it may destroy the events, and signalling a destroyed
+// one is fatal (an unmount after the gazebo's scan did that).
 static void nfp_tag_changed(int present) {
     uint64_t ev = present ? nfp_activate_ev : nfp_deactivate_ev;
-    if (ev && (!present || amiibo_is_detecting())) kern_signal_system_event(ev);
+    if (ev && amiibo_is_detecting()) kern_signal_system_event(ev);
 }
 
 static void ov_nfp_initialize(Cpu *c) {
@@ -313,6 +315,7 @@ static void ov_nfp_initialize(Cpu *c) {
 }
 static void ov_nfp_finalize(Cpu *c) {
     plat_xchg32(&nfp_state, 0);
+    nfp_activate_ev = nfp_deactivate_ev = 0;   // the game destroys its events with the reader
     amiibo_stop_detection();
     amiibo_unmount();
     ret_x(c, 0);
