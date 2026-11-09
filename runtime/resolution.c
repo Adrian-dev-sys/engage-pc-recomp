@@ -197,7 +197,7 @@ static uint64_t pack(unsigned w, unsigned h) { return (uint64_t)h << 32 | w; }
 // Engage (Unity): the set engres (recomp/patches-engage-v200.txt) makes Unity's screen size, the swapchain textures
 // and its 1920x1080 cap read page+0x50/+0x54. The game renders at output size * render scale ("game" = 100%);
 // the present scales that to the window. Read once at start: a change needs a restart.
-// Render targets Engage sizes from asset data, not from the screen (the 640x1080 unit-info and 480x480 talk
+// Render targets Engage sizes from asset data, not from the screen (the 640x1080 unit-info and talk character
 // models): their host images are enlarged by the render height / 1080 (vk_texture.c create_tex), so they get the
 // detail of the main scene. TOTK_RT_SCALE_SIZES lists the guest sizes ("640x1080,..."; "off" for none).
 static float rt_k = 1.0f;
@@ -213,7 +213,7 @@ float res_rt_scale(unsigned w, unsigned h) {
 
 static void rt_scale_init(unsigned render_h) {
     const char *s = cfg_get("TOTK_RT_SCALE_SIZES");
-    if (!s || !*s) s = "640x1080,480x480";   // unit info model, talk window face
+    if (!s || !*s) s = "640x1080";
     rt_nsizes = 0;
     for (const char *p = s; *p && rt_nsizes < 8;) {
         unsigned w, h;
