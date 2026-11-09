@@ -36,19 +36,33 @@ static int str_get(uint64_t s, char *out, size_t cap) {
     return 1;
 }
 
+static uint64_t g_string_klass;   // System.String's class, from the first game string seen
+
 // A string in host memory, kept for the run; the same text gives the same string.
 static uint64_t str_new(uint64_t klass, const char *t) {
+    if (klass) g_string_klass = klass;
+    else klass = g_string_klass;
+    if (!klass) return 0;
     static struct { char text[128]; uint64_t s; } cache[1024];
     static int n;
     for (int i = 0; i < n; i++)
         if (!strcmp(cache[i].text, t)) return cache[i].s;
     size_t len = strlen(t);
-    uint8_t *o = calloc(1, 0x14 + 2 * (len + 1));
+    uint8_t *o = calloc(1, 0x14 + 4 * (len + 1));   // UTF-8 -> UTF-16 never needs more than 2 units a byte
     if (!o) return 0;
     memcpy(o, &klass, 8);
-    int32_t l = (int32_t)len;
-    memcpy(o + 0x10, &l, 4);
-    for (size_t i = 0; i < len; i++) o[0x14 + 2 * i] = (uint8_t)t[i];
+    uint16_t *w = (uint16_t *)(o + 0x14);
+    int32_t units = 0;
+    for (size_t i = 0; i < len;) {
+        uint32_t ch = (uint8_t)t[i];
+        int extra = ch < 0x80 ? 0 : ch < 0xE0 ? 1 : ch < 0xF0 ? 2 : 3;
+        ch &= extra ? 0x3Fu >> extra : 0x7F;
+        i++;
+        for (int e = 0; e < extra && i < len; e++, i++) ch = ch << 6 | ((uint8_t)t[i] & 0x3F);
+        if (ch >= 0x10000) ch -= 0x10000, w[units++] = (uint16_t)(0xD800 + (ch >> 10)), w[units++] = (uint16_t)(0xDC00 + (ch & 0x3FF));
+        else w[units++] = (uint16_t)ch;
+    }
+    memcpy(o + 0x10, &units, 4);
     if (n < 1024 && len < sizeof cache->text) snprintf(cache[n].text, sizeof cache->text, "%s", t), cache[n++].s = (uint64_t)(uintptr_t)o;
     return (uint64_t)(uintptr_t)o;
 }
@@ -59,6 +73,8 @@ static void note(const char *what, const char *event) {   // the first few, so a
 }
 
 static uint64_t klass_of(uint64_t s) { return s ? *(const uint64_t *)(uintptr_t)s : 0; }
+
+uint64_t cobalt_string(uint64_t a_string, const char *text) { return str_new(klass_of(a_string), text); }
 
 static int loaded(Cpu *c, uint64_t klass, const char *event) {
     uint64_t s = str_new(klass, event);
