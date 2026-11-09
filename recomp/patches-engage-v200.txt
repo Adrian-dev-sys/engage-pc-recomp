@@ -237,3 +237,14 @@ site cobalt main 21f8420 1e241000 1e261000   # fmov s0, #8.0 -> #16.0: DragonAtt
 # LoadBank(this, name, method), as Cobalt's audio/gamesound.rs load_default_sound_banks.
 hook cobalt_default_banks main 2287c60
 hook cobalt_load_bank main 24f6110
+# Cobalt's voice handling (runtime/cobalt_voice.c): per-character mod voice events, "Mod!Fallback" person switches,
+# "CobaltEvent:" markers. Offsets from tools/il2cpp_map.py; they match Cobalt's for 2.0.0.
+hook cobalt_person_voice main 2292270          # App.GameSound::PersonVoice(5)
+hook cobalt_set_enum_param main 24f8de0        # App.SoundManager::SetEnumParam(3)
+hook cobalt_reserve_chara_voice main 1f87570   # App.UnitInfo::ReserveCharaVoice(4)
+hook cobalt_ring_voice main 2292f90            # App.GameSound::RingCleaningVoice(3)
+hook cobalt_unit_pick_voice main 2292360       # App.GameSound::UnitPickVoice(1)
+hook cobalt_post_event_temp main 24f7550       # App.SoundManager::PostEventWithTemporaryGameObject(4)
+hook cobalt_post_event_callback main 21f3a50   # App.SoundPlay::PostEventCallback
+hook cobalt_load_system_voice main 228e850     # App.GameSound::LoadSystemVoice(1)
+hook cobalt_unload_system_voice main 228ea70   # App.GameSound::UnloadSystemVoice(1)

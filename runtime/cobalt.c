@@ -17,6 +17,7 @@
 #include <strings.h>
 
 #include "cobalt.h"
+#include "cobalt_voice.h"
 #include "fs.h"
 #include "hooks.h"
 #include "host.h"
@@ -1463,6 +1464,7 @@ static void audio_init(void) {
     if (!nbanks) return;
     if (hook_install("cobalt_default_banks", hook_default_banks) && hook_install("cobalt_load_bank", hook_load_bank))
         rt_log("cobalt: %d new sound bank(s) to load", nbanks);
+    cobalt_voice_init();
 }
 
 // ======== the cache and the start
