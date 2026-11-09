@@ -583,6 +583,13 @@ static void present_image(VkImage src, VkImageLayout layout, VkFormat fmt, int w
     if (cy < 0) cy = 0;
     if (cx + cw > w) cw = w - cx;
     if (cy + ch > h) ch = h - cy;
+    // Engage's movies are 16:9: with the ultrawide UI (patch set uwfov, CanvasScaler Expand) the game draws one at 16:9 in
+    // the middle of a wider picture, over its blue canvas colour. While one plays only that middle is shown, with black
+    // bars beside it (TOTK_MOVIE_16X9)
+    if (RT_ENGAGE && (int64_t)cw * 9 > (int64_t)ch * 16 * 101 / 100 && movie_playing() && cfg_bool("TOTK_MOVIE_16X9")) {
+        int nw = ch * 16 / 9;
+        cx += (cw - nw) / 2, cw = nw;
+    }
     window_settings_live();
     // The menu overlay: laid out before recording (its first frame starts the ImGui back end and uploads the font)
     const char *menu_shot = NULL;
@@ -605,12 +612,7 @@ static void present_image(VkImage src, VkImageLayout layout, VkFormat fmt, int w
                  VK_PIPELINE_STAGE_2_TRANSFER_BIT, VK_ACCESS_2_TRANSFER_WRITE_BIT);
     const int rect[4] = {cx, cy, cw, ch};
     int to[4];   // where the picture goes in the swapchain image: {x, y, w, h}
-    // Engage's movies are 16:9 and the game stretches them over a wider picture: while one plays, the picture is fitted
-    // into a 16:9 box (black bars beside it), which undoes the stretch (TOTK_MOVIE_16X9)
-    if (RT_ENGAGE && (int64_t)cw * 9 > (int64_t)ch * 16 * 101 / 100 && movie_playing() && cfg_bool("TOTK_MOVIE_16X9"))
-        gfx_fit_rect(ch * 16 / 9, ch, (int)g_sc_ext.width, (int)g_sc_ext.height, to);
-    else
-        gfx_fit_rect(cw, ch, (int)g_sc_ext.width, (int)g_sc_ext.height, to);
+    gfx_fit_rect(cw, ch, (int)g_sc_ext.width, (int)g_sc_ext.height, to);
     if (to[2] != (int)g_sc_ext.width || to[3] != (int)g_sc_ext.height) {   // black bars beside or above and below it
         VkClearColorValue black = {.float32 = {0, 0, 0, 1}};
         VkImageSubresourceRange all = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
