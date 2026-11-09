@@ -188,6 +188,11 @@ site uwui main 2bf75cc f9405a68 52800209 1b097c00 52800129 1ac90800 f9405a68   #
 site uwui main 2bf91b4 940e49db 940e49eb   # ProfileCardStampRoot.GetStampRect: width / 1920: get_*width -> get_*height
 site uwui main 2bf91b8 d001b916 52800209 1b097c00 52800129 1ac90800 d001b916   #   ... * 16 / 9, then adrp x22, #0x631b000
 
+# The help frame and its items measure x from the screen's left edge, but live in the 16:9 container centred on a
+# wider screen: the side margin, (width - height * 16 / 9) / 2 pixels (page+0x5c, resolution.c), comes off first.
+site uwui main 215a348 4ea01c0a @page:x9 bd405d23 1e233800 4ea01c0a   # HelpParamSetter.MoveCursor: frame x from the screen left: x -= side margin (page+0x5c), then mov v10.16b, v0.16b
+site uwui main 1ce0f78 1e2e080f @page:x9 bd405d23 1e233800 1e2e080f   # HelpManager.Item..ctor: item x from the screen left: x -= side margin (page+0x5c), then fmul s15, s0, s14
+
 # Resolution: Unity's 1920x1080 screen size, swapchain textures and size cap read page+0x50 (width) and +0x54
 # (height), written by runtime/resolution.c engage_res_init from output_res * render_scale. On when not 1920x1080.
 set engres TOTK_ENGAGE_RES 0

@@ -253,6 +253,15 @@ static void engage_res_init(void) {
     // the set uwui gives the UI code a 16:9 screen width: right only on an output wider than 16:9
     int uwui = rt_patch_set("uwui");
     if (uwui >= 0 && (uint64_t)R.ow * 9 <= (uint64_t)R.oh * 16) rt_patch_switch(uwui, 0);
+    // the side margin of the 16:9 UI container on a wider screen, in render pixels (patch page +0x5c, set uwui)
+    if (uwui >= 0 && rt_patch_page()) {
+        double k = 1.0;
+        const char *sc = cfg_value("TOTK_RENDER_SCALE");
+        if (strcmp(sc, "game")) k = strtod(sc, NULL) / 100.0;
+        if (k < 0.25 || k > 4.0) k = 1.0;
+        float margin = (float)((R.ow - R.oh * 16.0 / 9.0) / 2.0 * k);
+        *(float *)((uint8_t *)rt_patch_page() + 0x5c) = margin > 0 ? margin : 0;
+    }
     const char *s = cfg_value("TOTK_RENDER_SCALE");
     double k = strcmp(s, "game") ? strtod(s, NULL) / 100.0 : 1.0;
     if (k < 0.25 || k > 4.0) k = 1.0;
