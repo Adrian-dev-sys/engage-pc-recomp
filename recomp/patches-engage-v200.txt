@@ -111,6 +111,19 @@ site fps60 main 2d7c2c0 1e200820 1e200820 @page:x8 bd405901 1e210800   # yaw ste
 site fps60 main 2d7c2fc 1e2b294a @page:x8 bd405900 1e20096b 1e2b294a   # yaw follow: s11 * 30/fps; fadd s10, s10, s11
 site fps60 main 2d7c6dc 1e2b294a @page:x8 bd405900 1e20096b 1e2b294a   # same, class-init path
 site fps60 main 2d7baf8 1e292908 @page:x8 bd405900 1e200929 1e292908   # zoom: s9 (+-0.05) * 30/fps; fadd s8, s8, s9
+# App.HubMascotCamera.UpdateKey / App.AnimalAccessCamera.UpdateKey (Somniel mascot and animal cameras): pitch -= stick * 5
+# and yaw += stick * 5 per frame, scaled by page+0x58 = 30/fps.
+site fps60 main 28b3664 1e213800 @page:x8 bd405903 1e230821 1e213800   # mascot pitch: s1 * 30/fps; fsub s0, s0, s1
+site fps60 main 28b36a8 1e202840 @page:x9 bd405923 1e230842 1e202840   # mascot yaw: s2 * 30/fps; fadd s0, s2, s0
+site fps60 main 1c8fe54 1e213800 @page:x8 bd405903 1e230821 1e213800   # animal pitch
+site fps60 main 1c8fe98 1e202840 @page:x9 bd405923 1e230842 1e202840   # animal yaw
+# World map free camera: GmapFreeCameraSequence.TryLRMove / TryUDMove orbit by stick * -0.17 per frame, and
+# GmapCamera.Zoom (only called by UpdateKey) moves the zoom by stick * m_ZoomSpeed per frame; scaled by 30/fps.
+site fps60 main 1cd2434 1e210800 1e210800 @page:x8 bd405901 1e210800   # orbit left/right: fmul s0, s0, s1; * 30/fps
+site fps60 main 1cd2598 1e210800 1e210800 @page:x8 bd405901 1e210800   # orbit up/down
+site fps60 main 252768c 1e213800 @page:x8 bd405903 1e230821 1e213800   # zoom: s1 * 30/fps; fsub s0, s0, s1
+# App.LaterTalkSequence.<Slide>d__39.MoveNext (talk window slide): elapsed += 0.03 per frame, scaled by 30/fps.
+site fps60 main 1fd5e94 1e212800 @page:x8 bd405902 1e220821 1e212800   # s1 * 30/fps; fadd s0, s0, s1
 # App.GmapCinemachineController.Move (world map ship sailing): path position += speed (1, or 3 when fast) per frame.
 site fps60 main 2528860 1e282920 @page:x8 bd405901 1e210908 1e282920   # s8 * 30/fps; fadd s0, s9, s8
 # App.RenderManager.CommitScale hands the top of the game's render-scale stack (0.9 on maps; also pushed by Somniel, the world map, events)
