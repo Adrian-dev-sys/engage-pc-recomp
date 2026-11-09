@@ -194,7 +194,39 @@ void res_heapdef_served(void) { R.heapdef_ok = 1; }
 // ---- start: the patch page and the sets
 static uint64_t pack(unsigned w, unsigned h) { return (uint64_t)h << 32 | w; }
 
+// Engage (Unity): the set engres (recomp/patches-engage-v200.txt) makes Unity's screen size, the swapchain textures
+// and its 1920x1080 cap read page+0x50/+0x54. The game renders at output size * render scale ("game" = 100%);
+// the present scales that to the window. Read once at start: a change needs a restart.
+static void engage_res_init(void) {
+    decide();
+    const char *s = cfg_value("TOTK_RENDER_SCALE");
+    double k = strcmp(s, "game") ? strtod(s, NULL) / 100.0 : 1.0;
+    if (k < 0.25 || k > 4.0) k = 1.0;
+    unsigned w = (unsigned)(R.ow * k + 0.5) & ~1u, h = (unsigned)(R.oh * k + 0.5) & ~1u;
+    double fit = fmin(1.0, fmin(7680.0 / w, 4320.0 / h));
+    w = (unsigned)(w * fit) & ~1u;
+    h = (unsigned)(h * fit) & ~1u;
+    int set = rt_patch_set("engres");
+    if (w == BASE_W && h == BASE_H) {
+        rt_log("resolution: Engage renders at its own 1920x1080");
+        return;
+    }
+    if (set < 0 || !rt_patch_page()) {
+        rt_log("resolution: the generated C has no engres patch set; Engage keeps 1920x1080");
+        return;
+    }
+    uint32_t *p = (uint32_t *)((uint8_t *)rt_patch_page() + 0x50);
+    p[0] = w;
+    p[1] = h;
+    rt_patch_switch(set, 1);
+    rt_log("resolution: Engage renders at %ux%u (output %ux%u, render scale %.0f%%)", w, h, R.ow, R.oh, k * 100);
+}
+
 void res_init(void) {
+    if (RT_ENGAGE) {
+        engage_res_init();
+        return;
+    }
     if (!bigger()) {
         rt_log("resolution: the game's own (output 1920x1080, scene 1600x900)");
         return;
