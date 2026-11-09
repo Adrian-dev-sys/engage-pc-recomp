@@ -21,6 +21,11 @@ ultrawide and level of detail (Screen).
 
 The log lists each mod at start (`mods: <name>: on, romfs, ok`) and the files it serves.
 
+Memory: Engage's application pool is the Switch's 3.2 GiB plus 1 GiB for mods and 512 MiB per 1080p of render pixels
+beyond the first (`resolution.c` `res_engage_pool_extra_bytes`; the log's `mem: application pool`). Unity keeps its
+render targets there; running out shows as `MapPhysicalMemory ... failed 0x10801` and then a crash. `app_pool` in
+`engage.ini` (bytes) overrides it.
+
 Code: `runtime/mods.c` (scan, order), `runtime/romfs.c` (player-mod overlays, `overlay_contest`), `runtime/ui/menu.cpp`
 `tab_mods`. Adapted from TotK Recomp.
 

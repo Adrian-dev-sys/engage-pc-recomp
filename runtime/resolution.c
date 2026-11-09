@@ -90,6 +90,19 @@ static int bigger(void) {
     return R.ow != BASE_W || R.oh != BASE_H || R.scene_set;
 }
 
+// Engage: Unity keeps its render targets in the application pool, sized for the Switch's 1080p; a larger render size
+// and mods' assets outgrow it (MapPhysicalMemory LimitReached, then a crash). 1 GiB for mods plus 512 MiB per 1080p of
+// render pixels beyond the first; only touched pages take host memory.
+uint64_t res_engage_pool_extra_bytes(void) {
+    decide();
+    const char *s = cfg_value("TOTK_RENDER_SCALE");
+    double k = strcmp(s, "game") ? strtod(s, NULL) / 100.0 : 1.0;
+    if (k < 0.25 || k > 4.0) k = 1.0;
+    double px = (double)R.ow * R.oh * k * k / (BASE_W * BASE_H);
+    uint64_t kib = (uint64_t)(1024.0 * 1024.0 + 512.0 * 1024.0 * fmax(0.0, px - 1.0));
+    return ((kib << 10) + 0x1fffff) & ~0x1fffffull;
+}
+
 uint64_t res_heap_extra_kib(void) {
     if (RT_ENGAGE) return 0;
     if (!bigger()) return 0;
