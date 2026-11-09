@@ -26,7 +26,8 @@ def header(m):
         raise SystemExit(f'metadata magic {magic:#x} version {ver}: only version 27 is read')
     f = struct.unpack_from('<64i', m, 8)
     sec = lambda i: (f[2 * i], f[2 * i + 1])   # (offset, size) of header section i
-    return {'string': sec(2), 'methods': sec(5), 'nested': sec(15), 'types': sec(19), 'images': sec(20)}
+    return {'string': sec(2), 'methods': sec(5), 'params': sec(10), 'nested': sec(15), 'types': sec(19),
+            'images': sec(20)}
 
 
 def cstr(b, o):
@@ -55,6 +56,47 @@ def build(exefs, metadata):
     by_target = {}
     for a, add in sorted(rel.items()):
         by_target.setdefault(add, a)
+    # Il2CppMetadataRegistration: found by its two type-definition counts (fieldOffsets, typeDefinitionsSizes).
+    reg_types, n_types = 0, 0
+    for a in range(nso.data[0], nso.data[0] + nso.data[1] - 32, 8):
+        if (struct.unpack_from('<Q', img, a)[0] == tn and struct.unpack_from('<Q', img, a + 16)[0] == tn
+                and a + 8 in rel and a + 24 in rel):
+            n_types, reg_types = struct.unpack_from('<Q', img, a - 0x20)[0], rel.get(a - 0x18, 0)
+            break
+    prim = {1: 'void', 2: 'bool', 3: 'char', 4: 'sbyte', 5: 'byte', 6: 'short', 7: 'ushort', 8: 'int', 9: 'uint',
+            0xa: 'long', 0xb: 'ulong', 0xc: 'float', 0xd: 'double', 0xe: 'string', 0x18: 'IntPtr', 0x1c: 'object'}
+
+    def tdname(t):
+        return s(struct.unpack_from('<i', m, to + t * TYPE_SIZE)[0])
+
+    def type_name(p):   # p: address of an Il2CppType
+        if not p:
+            return '?'
+        bits = struct.unpack_from('<I', img, p + 8)[0]
+        kind, byref = bits >> 16 & 0xFF, bits >> 30 & 1
+        data = rel.get(p, struct.unpack_from('<Q', img, p)[0])
+        if kind in prim:
+            name = prim[kind]
+        elif kind in (0x11, 0x12):   # VALUETYPE, CLASS: a type definition index
+            name = tdname(data & 0xFFFFFFFF)
+        elif kind == 0x1d:           # SZARRAY: the element type
+            name = type_name(data) + '[]'
+        elif kind == 0x15:           # GENERICINST: Il2CppGenericClass, its type definition first
+            name = tdname(struct.unpack_from('<i', img, data)[0]) + '<>'
+        elif kind in (0x13, 0x1e):
+            name = 'T'
+        else:
+            name = f'#{kind:x}'
+        return name + ('&' if byref else '')
+
+    def param_types(start, count):
+        po = h['params'][0]
+        out = []
+        for q in range(start, start + count):
+            ti = struct.unpack_from('<i', m, po + 12 * q + 8)[0]
+            out.append(type_name(rel.get(reg_types + 8 * ti, 0)) if reg_types and 0 <= ti < n_types else '?')
+        return ','.join(out)
+
     out = []
     for k in range(n_img):
         name_i, _, type_start, type_count = struct.unpack_from('<4i', m, io + k * IMAGE_SIZE)
@@ -83,12 +125,14 @@ def build(exefs, metadata):
                 mname = s(struct.unpack_from('<i', m, mb)[0])
                 token = struct.unpack_from('<I', m, mb + 20)[0]
                 nparams = struct.unpack_from('<H', m, mb + 30)[0]
+                pstart = struct.unpack_from('<i', m, mb + 12)[0]
+                static = ' static' if struct.unpack_from('<H', m, mb + 24)[0] & 0x10 else ''
                 rid = token & 0xFFFFFF
                 if not 0 < rid <= count:
                     continue
                 ptr = rel.get(ptrs + (rid - 1) * 8, 0)
                 if ptr:
-                    out.append((f'{full}::{mname}({nparams})', ptr))
+                    out.append((f'{full}::{mname}({nparams}) [{param_types(pstart, nparams)}]{static}', ptr))
     out.sort()
     return out
 

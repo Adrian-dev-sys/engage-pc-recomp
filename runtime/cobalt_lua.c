@@ -114,65 +114,169 @@ static int script_log(Cpu *c) {
     return 1;
 }
 
-// ---- Cobalt's Lua functions. The game registers its actions with EventScript.RegistAction(this, delegate, name),
-// which puts the delegate in the Lua globals; MoonSharp calls it through reflection, i.e. through the delegate's
-// MethodInfo: methodPointer(DynValue[] args, method). A Cobalt action is a copy of a game action's delegate and
-// MethodInfo whose methodPointer is a host function at a fixed address on the patch page (registered before the
-// dispatch table is sealed).
+// ---- Cobalt's Lua functions. The game registers its actions with EventScript.RegistAction(this, delegate, name)
+// (functions, which return a value, with RegistFunction), which puts the delegate in the Lua globals; MoonSharp calls
+// it through reflection, i.e. through the delegate's MethodInfo: methodPointer(DynValue[] args, method). A Cobalt
+// action is a copy of a game delegate and its MethodInfo whose methodPointer is a host function at a fixed address on
+// the patch page (registered before the dispatch table is sealed).
 #define REGIST_ACTION 0x24e2430   // App.EventScript::RegistAction(delegate, name)
+#define REGIST_FUNCTION 0x24e23e0 // App.EventScript::RegistFunction(delegate, name)
 #define HOST_ACTIONS (RT_PATCH_PAGE + 0x800)   // 16 bytes each; ov_zstd.c uses +0xfe0 and +0xff0
 
-typedef struct { const char *name; GuestFn fn; } Action;
-static void act_notice(Cpu *c);
-static const Action actions[] = {{"CobaltNotice", act_notice}};
+// main offsets of what the actions call (tools/il2cpp_map.py)
+#define TRY_UNIT 0x21961f0         // ScriptUtil.TryGetUnit(args, i, bool) static
+#define TRY_STRING 0x2196920       // ScriptUtil.TryGetString(args, i, default) static
+#define TRY_INT 0x2196cd0          // ScriptUtil.TryGetInt(args, i, default) static
+#define TRY_ITEM 0x21a3740         // ScriptUtil.TryGetItem(args, i, bool) static
+#define GET_SEQUENCE 0x21a4860     // ScriptUtil.GetSequence() static
+#define YIELD 0x21994e0            // ScriptUtil.Yield() static
+#define NOTICE_ADD 0x1f1b540       // NoticeManager.Add(Kinds, string) static
+#define NOTICE_FACILITY 1          // NoticeManager.Kinds.Facility
+#define UNIT_ITEM_ADD 0x1a0c990    // Unit.ItemAdd(string iid)
+#define TRANSPORTER_ADD 0x22a2040  // Transporter.Add(ItemData) static
+#define UNIT_SET_LEVEL 0x1a0e1d0   // Unit.set_Level(int)
+#define UNIT_LEARN_SKILL 0x1a3c290 // Unit.LearnJobSkill()
+#define GIFT_GET 0x23f38a0         // HubSequence.GiftGet(reward, message)
+#define ITEM_SHOP 0x28ab140        // HubItemShopSequence.CreateBind(ProcInst) static
+#define WEAPON_SHOP 0x2a744f0      // HubWeaponShopSequence.CreateBind(ProcInst) static
+#define REFINE_SHOP 0x23dccb0      // HubRefineShopSequence.CreateBind(ProcInst) static
+#define HAS_CONTENT 0x29f4270      // DLCManager.HasContent(Content) static; Content.E0 = 0, the expansion pass
+#define RING_ADD 0x1c5d420         // UnitRingPool.Add(rnid, Unit, count) static
+#define NEW_BOOLEAN 0x2e200f0      // DynValue.NewBoolean(bool) static
+#define G(off) hook_main(off)
+
+// The i-th argument as UTF-8 ("" when it is not a string).
+static void arg_str(Cpu *c, uint64_t args, int i, char *out, size_t cap) {
+    out[0] = 0;
+    if (!args || i >= *(const int32_t *)(uintptr_t)(args + 0x18)) return;
+    uint64_t dv = ld64(args + 0x20 + 8 * (uint64_t)i);
+    if (!dv || *(const int32_t *)(uintptr_t)(dv + 0x30) != DYN_STRING) return;
+    uint64_t s = guest_call(c, G(DYN_GET_STRING), dv, 0, 0, 0);
+    if (!s) return;
+    int32_t len = *(const int32_t *)(uintptr_t)(s + 0x10);
+    const uint16_t *w = (const uint16_t *)(uintptr_t)(s + 0x14);
+    size_t k = 0;
+    for (int32_t q = 0; q < len && k + 5 < cap; q++) {
+        uint32_t ch = w[q];
+        if (ch >= 0xD800 && ch < 0xDC00 && q + 1 < len) ch = 0x10000 + ((ch - 0xD800) << 10) + (w[++q] - 0xDC00u);
+        if (ch < 0x80) {
+            out[k++] = (char)ch;
+        } else if (ch < 0x800) {
+            out[k++] = (char)(0xC0 | ch >> 6), out[k++] = (char)(0x80 | (ch & 0x3F));
+        } else if (ch < 0x10000) {
+            out[k++] = (char)(0xE0 | ch >> 12), out[k++] = (char)(0x80 | (ch >> 6 & 0x3F));
+            out[k++] = (char)(0x80 | (ch & 0x3F));
+        } else {
+            out[k++] = (char)(0xF0 | ch >> 18), out[k++] = (char)(0x80 | (ch >> 12 & 0x3F));
+            out[k++] = (char)(0x80 | (ch >> 6 & 0x3F)), out[k++] = (char)(0x80 | (ch & 0x3F));
+        }
+    }
+    out[k] = 0;
+}
+
+static void act_notice(Cpu *c) {   // CobaltNotice(message)
+    char text[512];
+    arg_str(c, c->x[0], 0, text, sizeof text);
+    rt_log("cobalt: lua: CobaltNotice: %s", text);
+    uint64_t msg = guest_call(c, G(TRY_STRING), c->x[0], 0, 0, 0);
+    if (msg) guest_call(c, G(NOTICE_ADD), NOTICE_FACILITY, msg, 0, 0);
+}
+
+static void act_item_gain_silent(Cpu *c) {   // ItemGainSilent(pid | nil, iid)
+    uint64_t args = c->x[0], unit = guest_call(c, G(TRY_UNIT), args, 0, 0, 0);
+    if (unit) {
+        uint64_t iid = guest_call(c, G(TRY_STRING), args, 1, 0, 0);
+        if (iid) guest_call(c, G(UNIT_ITEM_ADD), unit, iid, 0, 0);
+    } else {   // no unit: the convoy
+        uint64_t item = guest_call(c, G(TRY_ITEM), args, 1, 0, 0);
+        if (item) guest_call(c, G(TRANSPORTER_ADD), item, 0, 0, 0);
+        guest_call(c, G(YIELD), 0, 0, 0, 0);
+    }
+}
+
+static void act_unit_set_level(Cpu *c) {   // UnitSetLevel(pid, level)
+    uint64_t args = c->x[0], unit = guest_call(c, G(TRY_UNIT), args, 0, 0, 0);
+    uint64_t level = guest_call(c, G(TRY_INT), args, 1, 1, 0);
+    if (unit) guest_call(c, G(UNIT_SET_LEVEL), unit, (uint32_t)level, 0, 0);
+}
+
+static void act_unit_learn_job_skill(Cpu *c) {   // UnitLearnJobSkill(pid)
+    uint64_t unit = guest_call(c, G(TRY_UNIT), c->x[0], 0, 0, 0);
+    if (unit) guest_call(c, G(UNIT_LEARN_SKILL), unit, 0, 0, 0);
+}
+
+static void act_unit_set_job(Cpu *c) {   // UnitSetJob(pid, jid[, mask]): needs StructData<JobData>.Get, not found yet
+    char jid[128];
+    arg_str(c, c->x[0], 1, jid, sizeof jid);
+    rt_log("cobalt: lua: UnitSetJob(%s) is not supported yet", jid);
+}
+
+static void act_item_gift(Cpu *c) {   // ItemGift(reward id, message id)
+    uint64_t args = c->x[0], seq = guest_call(c, G(GET_SEQUENCE), 0, 0, 0, 0);
+    uint64_t reward = guest_call(c, G(TRY_STRING), args, 0, 0, 0), mess = guest_call(c, G(TRY_STRING), args, 1, 0, 0);
+    if (seq && reward) guest_call(c, G(GIFT_GET), seq, reward, mess, 0);
+    guest_call(c, G(YIELD), 0, 0, 0, 0);
+}
+
+static void shop(Cpu *c, uint64_t create) {
+    uint64_t seq = guest_call(c, G(GET_SEQUENCE), 0, 0, 0, 0);
+    if (seq) guest_call(c, G(create), seq, 0, 0, 0);
+    guest_call(c, G(YIELD), 0, 0, 0, 0);
+}
+static void act_item_shop(Cpu *c) { shop(c, ITEM_SHOP); }
+static void act_weapon_shop(Cpu *c) { shop(c, WEAPON_SHOP); }
+static void act_refine_shop(Cpu *c) { shop(c, REFINE_SHOP); }
+
+static void act_add_bond_ring(Cpu *c) {   // AddBondRing(rnid[, count])
+    uint64_t args = c->x[0], rnid = guest_call(c, G(TRY_STRING), args, 0, 0, 0);
+    int64_t n = (int32_t)guest_call(c, G(TRY_INT), args, 1, 1, 0);
+    if (rnid) guest_call(c, G(RING_ADD), rnid, 0, (uint64_t)(n < 1 ? 1 : n), 0);
+}
+
+static void fn_has_season_pass(Cpu *c) {   // HasPurchasedSeasonPass() -> bool: a Lua function, not an action
+    uint64_t has = guest_call(c, G(HAS_CONTENT), 0, 0, 0, 0) & 1;
+    c->x[0] = guest_call(c, G(NEW_BOOLEAN), has, 0, 0, 0);
+}
+
+typedef struct { const char *name; GuestFn fn; int function; } Action;
+static const Action actions[] = {
+    {"CobaltNotice", act_notice, 0},
+    {"ItemGainSilent", act_item_gain_silent, 0},
+    {"UnitSetLevel", act_unit_set_level, 0},
+    {"UnitLearnJobSkill", act_unit_learn_job_skill, 0},
+    {"UnitSetJob", act_unit_set_job, 0},
+    {"ItemGift", act_item_gift, 0},
+    {"MenuItemShopShow", act_item_shop, 0},
+    {"MenuWeaponShopShow", act_weapon_shop, 0},
+    {"MenuRefineShopShow", act_refine_shop, 0},
+    {"AddBondRing", act_add_bond_ring, 0},
+    {"HasPurchasedSeasonPass", fn_has_season_pass, 1},
+};
 #define NACTIONS (sizeof actions / sizeof *actions)
 
 __attribute__((constructor)) static void actions_register(void) {
     for (size_t i = 0; i < NACTIONS; i++) rt_register_host(HOST_ACTIONS + 16 * i, actions[i].fn);
 }
 
-static uint64_t g_template;   // a game action delegate, seen in RegistAction
-
-// The i-th argument as a C string ("" when it is not a string).
-static void arg_str(Cpu *c, uint64_t args, int i, char *out, size_t cap) {
-    out[0] = 0;
-    if (!args || i >= *(const int32_t *)(uintptr_t)(args + 0x18)) return;
-    uint64_t dv = ld64(args + 0x20 + 8 * (uint64_t)i);
-    if (!dv || *(const int32_t *)(uintptr_t)(dv + 0x30) != DYN_STRING) return;
-    uint64_t s = guest_call(c, hook_main(DYN_GET_STRING), dv, 0, 0, 0);
-    if (!s) return;
-    int32_t len = *(const int32_t *)(uintptr_t)(s + 0x10);
-    const uint16_t *w = (const uint16_t *)(uintptr_t)(s + 0x14);
-    size_t k = 0;
-    for (int32_t q = 0; q < len && k + 4 < cap; q++) {   // UTF-16 -> UTF-8
-        uint32_t ch = w[q];
-        if (ch >= 0xD800 && ch < 0xDC00 && q + 1 < len) ch = 0x10000 + ((ch - 0xD800) << 10) + (w[++q] - 0xDC00);
-        if (ch < 0x80) out[k++] = (char)ch;
-        else if (ch < 0x800) out[k++] = (char)(0xC0 | ch >> 6), out[k++] = (char)(0x80 | (ch & 0x3F));
-        else if (ch < 0x10000) out[k++] = (char)(0xE0 | ch >> 12), out[k++] = (char)(0x80 | (ch >> 6 & 0x3F)), out[k++] = (char)(0x80 | (ch & 0x3F));
-        else out[k++] = (char)(0xF0 | ch >> 18), out[k++] = (char)(0x80 | (ch >> 12 & 0x3F)), out[k++] = (char)(0x80 | (ch >> 6 & 0x3F)), out[k++] = (char)(0x80 | (ch & 0x3F));
-    }
-    out[k] = 0;
-}
-
-static void act_notice(Cpu *c) {
-    char msg[512];
-    arg_str(c, c->x[0], 0, msg, sizeof msg);
-    rt_log("cobalt: lua: CobaltNotice: %s", msg);
-}
+static uint64_t g_template, g_ftemplate;   // a game action / function delegate, seen at their registration
 
 static int regist_action(Cpu *c) {
     if (!g_template && c->x[1]) g_template = c->x[1];
     return 0;
 }
+static int regist_function(Cpu *c) {
+    if (!g_ftemplate && c->x[1]) g_ftemplate = c->x[1];
+    return 0;
+}
 
 // A copy of the template delegate (and its MethodInfo) calling host action i.
 static uint64_t make_delegate(int i) {
+    uint64_t t = actions[i].function ? g_ftemplate : g_template;
+    if (!t) return 0;
     uint8_t *d = calloc(1, 0x80), *m = calloc(1, 0x60);
-    if (!d || !m || !g_template) return 0;
-    memcpy(d, (const void *)(uintptr_t)g_template, 0x68);
-    uint64_t method = ld64(g_template + 0x28);
-    memcpy(m, (const void *)(uintptr_t)method, 0x58);
+    if (!d || !m) return 0;
+    memcpy(d, (const void *)(uintptr_t)t, 0x68);
+    memcpy(m, (const void *)(uintptr_t)ld64(t + 0x28), 0x58);
     uint64_t fn = HOST_ACTIONS + 16 * (uint64_t)i, name = (uint64_t)(uintptr_t)actions[i].name, mp = (uint64_t)(uintptr_t)m;
     memcpy(m + 0x00, &fn, 8);     // methodPointer
     memcpy(m + 0x10, &name, 8);   // name
@@ -190,7 +294,8 @@ static int load_impl(Cpu *c) {
     for (size_t i = 0; i < NACTIONS; i++) {
         if (!delegates[i]) delegates[i] = make_delegate((int)i);
         uint64_t name = cobalt_string(path, actions[i].name);
-        if (delegates[i] && name) guest_call(c, hook_main(REGIST_ACTION), self, delegates[i], name, 0);
+        if (delegates[i] && name)
+            guest_call(c, G(actions[i].function ? REGIST_FUNCTION : REGIST_ACTION), self, delegates[i], name, 0);
     }
     if (!g_template) rt_log("cobalt: lua: no game action seen; Cobalt's Lua functions are missing");
     return 1;
@@ -198,6 +303,7 @@ static int load_impl(Cpu *c) {
 
 void cobalt_lua_init(void) {
     hook_install("cobalt_regist_action", regist_action);
+    hook_install("cobalt_regist_function", regist_function);
     hook_install("cobalt_eventscript_load", load_impl);
     hook_install("cobalt_script_log", script_log);
     if (nscripts && hook_install("cobalt_map_opening", map_opening))
