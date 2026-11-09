@@ -176,6 +176,18 @@ site uwui main 2bfb7fc 1e220000 52800209 1b097c00 52800129 1ac90800 1e220000   #
 site uwui main 2bfb8f0 940e400c 940e401c   # ProfileCardStampRoot.ResetStampPosition: get_width -> get_height
 site uwui main 2bfb8f4 1e220000 52800209 1b097c00 52800129 1ac90800 1e220000   #   ... * 16 / 9, then scvtf s0, w0
 
+# More UI code converting pixels to 1920-wide UI units by width (found by the 1920 / width pattern):
+site uwui main 1f7064c 94332b29 94332b3d   # UnitActors.LateUpdate: map gauges/icons, ui = offset * 1920 / pixelWidth: get_*width -> get_*height
+site uwui main 1f70650 2a0003f9 52800209 1b097c00 52800129 1ac90800 2a0003f9   #   ... * 16 / 9, then mov w25, w0
+site uwui main 1ce0ef0 944aaa8c 944aaa9c   # HelpManager.Item..ctor: help frame size * 1920 / width: get_*width -> get_*height
+site uwui main 1ce0ef4 1e220000 52800209 1b097c00 52800129 1ac90800 1e220000   #   ... * 16 / 9, then scvtf s0, w0
+site uwui main 1ce0f80 944aaa68 944aaa78   # HelpManager.Item..ctor: help frame position * 1920 / width: get_*width -> get_*height
+site uwui main 1ce0f84 1e220000 52800209 1b097c00 52800129 1ac90800 1e220000   #   ... * 16 / 9, then scvtf s0, w0
+site uwui main 2bf75c8 940e50d6 940e50e6   # ProfileCardStampMenu.ACall: width / 1920: get_*width -> get_*height
+site uwui main 2bf75cc f9405a68 52800209 1b097c00 52800129 1ac90800 f9405a68   #   ... * 16 / 9, then ldr x8, [x19, #0xb0]
+site uwui main 2bf91b4 940e49db 940e49eb   # ProfileCardStampRoot.GetStampRect: width / 1920: get_*width -> get_*height
+site uwui main 2bf91b8 d001b916 52800209 1b097c00 52800129 1ac90800 d001b916   #   ... * 16 / 9, then adrp x22, #0x631b000
+
 # Resolution: Unity's 1920x1080 screen size, swapchain textures and size cap read page+0x50 (width) and +0x54
 # (height), written by runtime/resolution.c engage_res_init from output_res * render_scale. On when not 1920x1080.
 set engres TOTK_ENGAGE_RES 0
