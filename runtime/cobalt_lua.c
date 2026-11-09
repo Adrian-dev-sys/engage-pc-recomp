@@ -205,10 +205,39 @@ static void act_unit_learn_job_skill(Cpu *c) {   // UnitLearnJobSkill(pid)
     if (unit) guest_call(c, G(UNIT_LEARN_SKILL), unit, 0, 0, 0);
 }
 
-static void act_unit_set_job(Cpu *c) {   // UnitSetJob(pid, jid[, mask]): needs StructData<JobData>.Get, not found yet
-    char jid[128];
-    arg_str(c, c->x[0], 1, jid, sizeof jid);
-    rt_log("cobalt: lua: UnitSetJob(%s) is not supported yet", jid);
+// Generic methods and classes through the metadata-usage slots the game uses (tools/il2cpp_usages.py): il2cpp
+// initialises a slot, which then holds the MethodInfo (whose methodPointer comes first) or the class.
+#define SLOT_JOBDATA_GET 0x617df48   // StructData<JobData>.Get(string) static
+#define SLOT_WEAPONMASK 0x615c608    // class WeaponMask
+#define OBJECT_NEW 0x4921f0          // il2cpp object allocation (class)
+#define WEAPONMASK_CTOR 0x21ca080    // WeaponMask..ctor(int)
+#define UNIT_CLASS_CHANGE 0x1a3c7b0  // Unit.ClassChange(JobData, ItemData)
+#define UNIT_SET_WEAPON 0x1a3cd50    // Unit.SetSelectedWeapon(WeaponMask)
+
+static uint64_t slot(Cpu *c, uint64_t off) {
+    guest_call(c, G(INIT_METADATA), G(off), 0, 0, 0);
+    return ld64(G(off));
+}
+
+static void act_unit_set_job(Cpu *c) {   // UnitSetJob(pid, jid[, weapon mask 1..0x3FF])
+    uint64_t args = c->x[0], unit = guest_call(c, G(TRY_UNIT), args, 0, 0, 0);
+    uint64_t jid = guest_call(c, G(TRY_STRING), args, 1, 0, 0);
+    uint64_t get = slot(c, SLOT_JOBDATA_GET), job = jid && get ? guest_call(c, ld64(get), jid, get, 0, 0) : 0;
+    char name[128];
+    arg_str(c, args, 1, name, sizeof name);
+    if (!unit || !job) {
+        rt_log("cobalt: lua: UnitSetJob: no %s", !unit ? "unit" : name);
+        return;
+    }
+    guest_call(c, G(UNIT_CLASS_CHANGE), unit, job, 0, 0);
+    int32_t mask = (int32_t)guest_call(c, G(TRY_INT), args, 2, 0x7fffffff, 0);
+    if (mask >= 1 && mask <= 0x3FF) {
+        uint64_t klass = slot(c, SLOT_WEAPONMASK), wm = klass ? guest_call(c, G(OBJECT_NEW), klass, 0, 0, 0) : 0;
+        if (wm) {
+            guest_call(c, G(WEAPONMASK_CTOR), wm, (uint32_t)mask, 0, 0);
+            guest_call(c, G(UNIT_SET_WEAPON), unit, wm, 0, 0);
+        }
+    }
 }
 
 static void act_item_gift(Cpu *c) {   // ItemGift(reward id, message id)
