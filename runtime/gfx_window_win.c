@@ -13,6 +13,7 @@
 #include <imm.h>
 
 #include "cfg.h"
+#include "screenshot.h"
 #include "flight.h"
 #include "fs.h"
 #include "gfx.h"
@@ -206,6 +207,8 @@ static LRESULT CALLBACK wnd_proc(HWND h, UINT m, WPARAM w, LPARAM l) {
     if (menu_window_msg(h, m, w, l, &input_res)) return input_res;
     switch (m) {
     case WM_KEYDOWN:
+        if (w == VK_F12 && !(l & (1 << 30))) screenshot_request();
+        if (w == 'T' && !(l & (1 << 30)) && RT_ENGAGE && !menu_is_open()) fast_forward_toggle();
         if (w == VK_F11 && !(l & (1 << 30))) {   // bit 30: auto-repeat
             input_cursor_suspend(1);
             toggle_fullscreen(h);

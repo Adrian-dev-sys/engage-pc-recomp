@@ -4,6 +4,7 @@
 #include <string.h>
 #include <SDL3/SDL.h>
 #include "cfg.h"
+#include "gfx.h"
 #include "host.h"
 #include "ipc.h"
 #include "platform/platform.h"
@@ -95,6 +96,7 @@ static void silent_clock(void *user) {
 static void gain(AudioOut *a) {
     double pct = cfg_double("TOTK_VOLUME");
     if (pct < 0) pct = 0; if (pct > 100) pct = 100;
+    if (cfg_double("TOTK_MUTE_BACKGROUND") != 0 && !gfx_window_focused()) pct = 0;   // TOTK_MUTE_BACKGROUND
     plat_mutex_lock(&a->lock); float volume = a->volume; plat_mutex_unlock(&a->lock);
     if (a->stream) SDL_SetAudioStreamGain(a->stream, volume * (float)(pct / 100));
 }

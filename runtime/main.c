@@ -19,6 +19,7 @@
 // rt_ticks, the function profiler hook), logging, SHA-256, and the crash reporter (a vectored exception handler that
 // names the lifted function, the guest registers and the guest frame-pointer chain).
 #include <limits.h>
+#include <stdatomic.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -173,7 +174,37 @@ static PlatScale tick_scale;
 
 __attribute__((constructor)) static void tick_scale_init(void) { tick_scale = plat_scale(19200000u, plat_counter_hz()); }
 
-uint64_t rt_ticks(void) { return plat_scaled(tick_scale, plat_counter()); }
+// Fast-forward (rt_speed_set): the guest clock runs mul times as fast from the moment of the change, so it stays
+// continuous. Readers take one immutable slot; a change writes the next slot of a ring, then publishes it.
+typedef struct { uint64_t real, guest; uint32_t mul; } SpeedSlot;
+static SpeedSlot speed_slots[16] = {{0, 0, 1}};
+static _Atomic(SpeedSlot *) speed_cur = &speed_slots[0];
+
+static uint64_t real_ticks(void) { return plat_scaled(tick_scale, plat_counter()); }
+
+uint64_t rt_ticks(void) {
+    const SpeedSlot *s = atomic_load_explicit(&speed_cur, memory_order_acquire);
+    uint64_t r = real_ticks();
+    return s->guest + (r - s->real) * s->mul;
+}
+
+void rt_speed_set(unsigned mul) {
+    static PlatMutex lock = PLAT_MUTEX_INIT;
+    static unsigned next = 1;
+    if (mul < 1) mul = 1;
+    plat_mutex_lock(&lock);
+    SpeedSlot *old = atomic_load(&speed_cur);
+    if (old->mul != mul) {
+        uint64_t r = real_ticks();
+        SpeedSlot *s = &speed_slots[next++ % 16];
+        *s = (SpeedSlot){r, old->guest + (r - old->real) * old->mul, mul};
+        atomic_store_explicit(&speed_cur, s, memory_order_release);
+        rt_log("speed: game clock x%u", mul);
+    }
+    plat_mutex_unlock(&lock);
+}
+
+unsigned rt_speed(void) { return atomic_load_explicit(&speed_cur, memory_order_acquire)->mul; }
 
 // ---- crash reporter
 typedef struct { uintptr_t host; uint64_t guest; } FnRev;
@@ -513,6 +544,7 @@ int main(int argc, char **argv) {
     log_open(!mode);
     if (!mode) {
         cfg.boot = cfg.seconds > 0;   // --seconds starts the game like --boot, with its checkpoints
+        playtime_init();   // the Game tab's play time across runs (playtime.c)
         rt_boot();
         return 0;
     }

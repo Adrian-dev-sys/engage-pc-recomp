@@ -274,6 +274,11 @@ void frame_step_init(void);                                // after rt_patches_i
 int frame_step_unity_unlocked(void);                       // Engage: ignore the game's interval, pace at the limit
 int frame_step_realtime(void);                             // the real-time step is on: presents ignore the interval
 uint64_t frame_step_cap_ns(void);                          // with the real-time step: the shortest frame in ns
+void playtime_init(void);                                  // playtime.c: the play time thread, game runs only
+void playtime_save(void);                                  // playtime.c: writes <profile>/playtime.txt; at exit
+int playtime_get(uint64_t *total_s, uint64_t *session_s); // playtime.c: all runs and this one; 0 without a profile
+void fast_forward_toggle(void);                            // Engage: T / L3+R3 (frame_rate.c)
+int fast_forward_on(void);
 double frame_step_limit_hz(void);                         // the frame rate the limit gives (overlay); 0 unknown
 int64_t frame_step_world_us(void);                         // game time since the loaded save's first frame, -1 before
                                                            // (TOTK_FPS_LIMIT, live)

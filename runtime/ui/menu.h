@@ -23,6 +23,7 @@ extern "C" {
 
 // ---- state, any thread
 int menu_is_open(void);
+void menu_toast(const char *msg);   // any thread: a notice at the top of the screen for 2 s
 void menu_toggle(void);                   // F1 / Esc on the keyboard, Minus+Plus on the pad
 void menu_perf_cycle(void);               // F10: the performance overlay off, fps, full
 

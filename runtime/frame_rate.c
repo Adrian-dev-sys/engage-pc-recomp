@@ -159,6 +159,24 @@ static void engage_store(double v) {
     *(uint32_t *)((uint8_t *)rt_patch_page() + 0x4c) = n;
 }
 
+// ---- fast-forward (Engage): T or L3+R3 toggle it; the guest clock (rt_speed_set) and the game step run
+// TOTK_FAST_FORWARD times as fast, so Unity's time and the frame-counted game logic stay together.
+static volatile int32_t ff_on;
+
+static unsigned ff_mul(void) {
+    double x = cfg_double("TOTK_FAST_FORWARD");
+    return x < 2 ? 2 : x > 4 ? 4 : (unsigned)x;
+}
+
+void fast_forward_toggle(void) {
+    if (!RT_ENGAGE) return;
+    int on = !ff_on;
+    plat_xchg32(&ff_on, on);
+    rt_speed_set(on ? ff_mul() : 1);
+}
+
+int fast_forward_on(void) { return ff_on != 0; }
+
 static void engage_frame(double dt) {
     static double logged_hz;
     if (fps60_set < 0 || !rt_patch_page()) return;
@@ -181,6 +199,11 @@ static void engage_frame(double dt) {
         if (v > 2.0) v = 2.0;
     } else {
         eg_count = eg_next = 0;
+    }
+    if (ff_on) {
+        unsigned mul = ff_mul();
+        if (rt_speed() != mul) rt_speed_set(mul);   // the menu changed the speed
+        v *= mul;
     }
     engage_store(v);
 }

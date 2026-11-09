@@ -25,6 +25,7 @@
 #include <SDL3/SDL.h>
 
 #include "cfg.h"
+#include "gfx.h"
 #include "audio_effects.h"
 #include "audio_reverb.h"
 #include "audren.h"
@@ -70,15 +71,19 @@ static _Atomic float device_volume = 1.0f;
 
 // TOTK_VOLUME: the player's volume in percent (0..100) on top of the game's own; a live setting (the
 // menu), parsed again when cfg_version changes. Render thread only.
+// TOTK_MUTE_BACKGROUND: silent while the window is not focused.
 static float host_volume(void) {
     static float v = 1.0f;
+    static int mute_bg;
     static unsigned seen = ~0u;
     unsigned ver = cfg_version();
-    if (ver == seen) return v;
-    seen = ver;
-    double pct = cfg_double("TOTK_VOLUME");
-    v = (float)((pct < 0 ? 0 : pct > 100 ? 100 : pct) / 100);
-    return v;
+    if (ver != seen) {
+        seen = ver;
+        double pct = cfg_double("TOTK_VOLUME");
+        v = (float)((pct < 0 ? 0 : pct > 100 ? 100 : pct) / 100);
+        mute_bg = cfg_double("TOTK_MUTE_BACKGROUND") != 0;
+    }
+    return mute_bg && !gfx_window_focused() ? 0.0f : v;
 }
 static unsigned audio_revision(const AudioRenderer *r) { unsigned byte = r->revision >> 24; return byte >= '0' ? byte - '0' : 0; }
 static void report_once(Mixer *m, unsigned bit, const char *msg, int value) {

@@ -19,6 +19,7 @@
 #include <string.h>
 #include <time.h>
 
+#include "amiibo.h"
 #include "cfg.h"
 #include "fs.h"
 #include "host.h"
@@ -294,26 +295,131 @@ static void ov_report_save(Cpu *c) {   // Result PlayReport::Save() and Save(con
 }
 static void ov_result_ok(Cpu *c) { ret_x(c, 0); }   // RequestImmediateTransmission, AddInternetConnectionStatus
 
-// nn::nfp: no NFC reader
+// nn::nfp: the emulated reader (amiibo.c; F1 > Amiibo puts a dump on it). Adapted from TotK Recomp
+// runtime/ov_system.c (MIT); Engage also calls GetCommonInfo, the two-argument Mount, Unmount and Restore, and waits
+// for the activate event, which a tap signals while detection runs.
 static volatile int32_t nfp_state;
-static void ov_nfp_initialize(Cpu *c) { plat_xchg32(&nfp_state, 1); ret_x(c, 0); }
-static void ov_nfp_finalize(Cpu *c) { plat_xchg32(&nfp_state, 0); ret_x(c, 0); }
+static volatile uint64_t nfp_activate_ev, nfp_deactivate_ev;
+
+static void nfp_tag_changed(int present) {
+    uint64_t ev = present ? nfp_activate_ev : nfp_deactivate_ev;
+    if (ev && (!present || amiibo_is_detecting())) kern_signal_system_event(ev);
+}
+
+static void ov_nfp_initialize(Cpu *c) {
+    amiibo_set_listener(nfp_tag_changed);
+    plat_xchg32(&nfp_state, 1);
+    ret_x(c, 0);
+}
+static void ov_nfp_finalize(Cpu *c) {
+    plat_xchg32(&nfp_state, 0);
+    amiibo_stop_detection();
+    amiibo_unmount();
+    ret_x(c, 0);
+}
 static void ov_nfp_state(Cpu *c) { ret_x(c, (uint64_t)nfp_state); }
+
 // Result ListDevices(DeviceHandle *out, int *count, int max)
 static void ov_nfp_list(Cpu *c) {
+    void *out = arg_p(c, 0);
     int32_t *count = arg_p(c, 1);
-    if (count) *count = 0;
-    ret_x(c, NFP_R_DEVICE_NOT_FOUND);
+    int32_t max = (int32_t)arg_x(c, 2);
+    if (!amiibo_is_device_present()) {
+        if (count) *count = 0;
+        ret_x(c, NFP_R_DEVICE_NOT_FOUND);
+        return;
+    }
+    if (out && max > 0) {
+        static const uint8_t dev[8] = {1, 0, 0, 0, 0, 0, 0, 0};
+        memcpy(out, dev, sizeof dev);
+    }
+    if (count) *count = 1;
+    ret_x(c, 0);
 }
-// Result AttachAvailabilityChangeEvent(os::SystemEventType *event)
+
+// Result AttachAvailabilityChangeEvent(os::SystemEventType *event): the reader is there from the start
 static void ov_nfp_availability(Cpu *c) {
     uint64_t ev = arg_x(c, 0);
     if (!ev) rt_fatal("nn::nfp::AttachAvailabilityChangeEvent: null event");
     kern_bind_system_event(c, ev, 0);
+    kern_signal_system_event(ev);
     ret_x(c, 0);
 }
-static void ov_nfp_no_device(Cpu *c) { ret_x(c, NFP_R_DEVICE_NOT_FOUND); }
-static void ov_nfp_device_state(Cpu *c) { ret_x(c, 0); }   // DeviceState GetDeviceState(const DeviceHandle &): none
+
+static void ov_nfp_device_state(Cpu *c) { ret_x(c, (uint64_t)amiibo_get_device_state()); }
+
+// Result Mount(const DeviceHandle &, ModelType[, MountTarget])
+static void ov_nfp_mount(Cpu *c) { ret_x(c, amiibo_has_tag() && amiibo_mount() ? 0 : NFP_R_DEVICE_NOT_FOUND); }
+static void ov_nfp_unmount(Cpu *c) {
+    amiibo_unmount();
+    ret_x(c, 0);
+}
+static void ov_nfp_restore(Cpu *c) { ret_x(c, 0); }
+
+// Result GetNpadId(u32 *npad_id, const DeviceHandle &)
+static void ov_nfp_get_npad_id(Cpu *c) {
+    uint32_t *npad = arg_p(c, 0);
+    if (npad) *npad = 0;   // player 1
+    ret_x(c, 0);
+}
+
+// Result AttachActivateEvent / AttachDeactivateEvent(os::SystemEventType *event, const DeviceHandle &)
+static void ov_nfp_attach_activate(Cpu *c) {
+    uint64_t ev = arg_x(c, 0);
+    if (ev) {
+        kern_bind_system_event(c, ev, 0);
+        nfp_activate_ev = ev;
+    }
+    ret_x(c, 0);
+}
+static void ov_nfp_attach_deactivate(Cpu *c) {
+    uint64_t ev = arg_x(c, 0);
+    if (ev) {
+        kern_bind_system_event(c, ev, 0);
+        nfp_deactivate_ev = ev;
+    }
+    ret_x(c, 0);
+}
+
+// Result StartDetection / StopDetection(const DeviceHandle &): a tag already on the reader activates at once
+static void ov_nfp_start_detection(Cpu *c) {
+    amiibo_start_detection();
+    if (amiibo_has_tag() && nfp_activate_ev) kern_signal_system_event(nfp_activate_ev);
+    ret_x(c, 0);
+}
+static void ov_nfp_stop_detection(Cpu *c) {
+    amiibo_stop_detection();
+    ret_x(c, 0);
+}
+
+// Result GetTagInfo / GetModelInfo / GetCommonInfo(T *out, const DeviceHandle &)
+static void ov_nfp_get_tag_info(Cpu *c) {
+    void *out = arg_p(c, 0);
+    if (!amiibo_has_tag() && !amiibo_is_mounted()) {
+        ret_x(c, NFP_R_DEVICE_NOT_FOUND);
+        return;
+    }
+    if (out) amiibo_get_tag_info(out);
+    ret_x(c, 0);
+}
+static void ov_nfp_get_model_info(Cpu *c) {
+    void *out = arg_p(c, 0);
+    if (!amiibo_is_mounted() && !amiibo_has_tag()) {
+        ret_x(c, NFP_R_DEVICE_NOT_FOUND);
+        return;
+    }
+    if (out) amiibo_get_model_info(out);
+    ret_x(c, 0);
+}
+static void ov_nfp_get_common_info(Cpu *c) {
+    void *out = arg_p(c, 0);
+    if (!amiibo_is_mounted() && !amiibo_has_tag()) {
+        ret_x(c, NFP_R_DEVICE_NOT_FOUND);
+        return;
+    }
+    if (out) amiibo_get_common_info(out);
+    ret_x(c, 0);
+}
 
 // void err::ShowError(Result): the game's error dialog, logged
 static void ov_show_error(Cpu *c) {
@@ -855,14 +961,18 @@ HOST_OVERRIDE("_ZN2nn3nfp8GetStateEv", ov_nfp_state);
 HOST_OVERRIDE("_ZN2nn3nfp11ListDevicesEPNS0_12DeviceHandleEPii", ov_nfp_list);
 HOST_OVERRIDE("_ZN2nn3nfp29AttachAvailabilityChangeEventEPNS_2os15SystemEventTypeE", ov_nfp_availability);
 HOST_OVERRIDE("_ZN2nn3nfp14GetDeviceStateERKNS0_12DeviceHandleE", ov_nfp_device_state);
-HOST_OVERRIDE("_ZN2nn3nfp5MountERKNS0_12DeviceHandleENS0_9ModelTypeENS0_11MountTargetE", ov_nfp_no_device);
-HOST_OVERRIDE("_ZN2nn3nfp9GetNpadIdEPjRKNS0_12DeviceHandleE", ov_nfp_no_device);
-HOST_OVERRIDE("_ZN2nn3nfp19AttachActivateEventEPNS_2os15SystemEventTypeERKNS0_12DeviceHandleE", ov_nfp_no_device);
-HOST_OVERRIDE("_ZN2nn3nfp21AttachDeactivateEventEPNS_2os15SystemEventTypeERKNS0_12DeviceHandleE", ov_nfp_no_device);
-HOST_OVERRIDE("_ZN2nn3nfp14StartDetectionERKNS0_12DeviceHandleE", ov_nfp_no_device);
-HOST_OVERRIDE("_ZN2nn3nfp13StopDetectionERKNS0_12DeviceHandleE", ov_nfp_no_device);
-HOST_OVERRIDE("_ZN2nn3nfp10GetTagInfoEPNS0_7TagInfoERKNS0_12DeviceHandleE", ov_nfp_no_device);
-HOST_OVERRIDE("_ZN2nn3nfp12GetModelInfoEPNS0_9ModelInfoERKNS0_12DeviceHandleE", ov_nfp_no_device);
+HOST_OVERRIDE("_ZN2nn3nfp5MountERKNS0_12DeviceHandleENS0_9ModelTypeENS0_11MountTargetE", ov_nfp_mount);
+HOST_OVERRIDE("_ZN2nn3nfp5MountERKNS0_12DeviceHandleENS0_9ModelTypeE", ov_nfp_mount);
+HOST_OVERRIDE("_ZN2nn3nfp7UnmountERKNS0_12DeviceHandleE", ov_nfp_unmount);
+HOST_OVERRIDE("_ZN2nn3nfp7RestoreERKNS0_12DeviceHandleE", ov_nfp_restore);
+HOST_OVERRIDE("_ZN2nn3nfp9GetNpadIdEPjRKNS0_12DeviceHandleE", ov_nfp_get_npad_id);
+HOST_OVERRIDE("_ZN2nn3nfp19AttachActivateEventEPNS_2os15SystemEventTypeERKNS0_12DeviceHandleE", ov_nfp_attach_activate);
+HOST_OVERRIDE("_ZN2nn3nfp21AttachDeactivateEventEPNS_2os15SystemEventTypeERKNS0_12DeviceHandleE", ov_nfp_attach_deactivate);
+HOST_OVERRIDE("_ZN2nn3nfp14StartDetectionERKNS0_12DeviceHandleE", ov_nfp_start_detection);
+HOST_OVERRIDE("_ZN2nn3nfp13StopDetectionERKNS0_12DeviceHandleE", ov_nfp_stop_detection);
+HOST_OVERRIDE("_ZN2nn3nfp10GetTagInfoEPNS0_7TagInfoERKNS0_12DeviceHandleE", ov_nfp_get_tag_info);
+HOST_OVERRIDE("_ZN2nn3nfp12GetModelInfoEPNS0_9ModelInfoERKNS0_12DeviceHandleE", ov_nfp_get_model_info);
+HOST_OVERRIDE("_ZN2nn3nfp13GetCommonInfoEPNS0_10CommonInfoERKNS0_12DeviceHandleE", ov_nfp_get_common_info);
 HOST_OVERRIDE("_ZN2nn3err9ShowErrorENS_6ResultE", ov_show_error);
 
 HOST_OVERRIDE("nndiagStartup", ov_diag_startup);

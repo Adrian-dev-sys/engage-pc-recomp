@@ -34,7 +34,14 @@
 enum { DEFAULT_KEY_COUNT = 26, DEFAULT_PAD_COUNT = 16 };
 _Static_assert(sizeof (Binding[]){DEFAULT_KEYS} / sizeof (Binding) == DEFAULT_KEY_COUNT, "DEFAULT_KEY_COUNT");
 
-static const InputMap defaults = {{DEFAULT_KEYS}, DEFAULT_KEY_COUNT, {{NINTENDO_PADS}, {XBOX_PADS}},
+// Engage: a tactics layout. WASD moves the cursor, arrows are the D-pad, IJKL the camera; Space/Enter confirm, Shift or
+// Backspace cancel (hold for the fast cursor), Q/E cycle units.
+#define ENGAGE_KEYS     {KEY_W, B_SL_UP}, {KEY_A, B_SL_LEFT}, {KEY_S, B_SL_DOWN}, {KEY_D, B_SL_RIGHT},     {KEY_UP, B_UP}, {KEY_LEFT, B_LEFT}, {KEY_DOWN, B_DOWN}, {KEY_RIGHT, B_RIGHT},     {KEY_I, B_SR_UP}, {KEY_J, B_SR_LEFT}, {KEY_K, B_SR_DOWN}, {KEY_L, B_SR_RIGHT},     {KEY_SPACE, B_A}, {KEY_ENTER, B_A}, {KEY_LSHIFT, B_B}, {KEY_BACKSPACE, B_B}, {KEY_F, B_X}, {KEY_R, B_Y},     {KEY_Q, B_L}, {KEY_E, B_R}, {KEY_Z, B_ZL}, {KEY_C, B_ZR}, {KEY_LCTRL, B_STICK_L}, {KEY_V, B_STICK_R},     {KEY_TAB, B_PLUS}, {KEY_M, B_MINUS}
+enum { ENGAGE_KEY_COUNT = 26 };
+_Static_assert(sizeof (Binding[]){ENGAGE_KEYS} / sizeof (Binding) == ENGAGE_KEY_COUNT, "ENGAGE_KEY_COUNT");
+static const Binding engage_keys[] = {ENGAGE_KEYS};
+
+static InputMap defaults = {{DEFAULT_KEYS}, DEFAULT_KEY_COUNT, {{NINTENDO_PADS}, {XBOX_PADS}},
                                   {DEFAULT_PAD_COUNT, DEFAULT_PAD_COUNT}};
 InputMap input_map = {{DEFAULT_KEYS}, DEFAULT_KEY_COUNT, {{NINTENDO_PADS}, {XBOX_PADS}},
                       {DEFAULT_PAD_COUNT, DEFAULT_PAD_COUNT}};
@@ -63,7 +70,20 @@ const char *input_action_name(int action) { return action >= 0 && action < ACTIO
 const char *input_key_name(int key) { return key > KEY_NONE && key < KEY_COUNT ? key_names[key] : NULL; }
 const char *input_pad_name(int pad) { return pad > PAD_NONE && pad < PAD_COUNT ? pad_names[pad] : NULL; }
 
-void input_map_reset(void) { input_map = defaults; }
+// The game's keyboard defaults: TotK's table, Engage's when the game is Engage.
+static void game_defaults(void) {
+    static int done;
+    if (done) return;
+    done = 1;
+    if (!RT_ENGAGE) return;
+    memcpy(defaults.keys, engage_keys, sizeof engage_keys);
+    defaults.nkeys = ENGAGE_KEY_COUNT;
+}
+
+void input_map_reset(void) {
+    game_defaults();
+    input_map = defaults;
+}
 
 static int key_id(const char *name) {
     for (int k = KEY_A; k < KEY_COUNT; k++)
