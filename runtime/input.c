@@ -475,7 +475,10 @@ static void poll_merged(uint64_t *buttons, int32_t *lx, int32_t *ly, int32_t *rx
     sl[0] = st[0], sl[1] = st[1], sr[0] = st[2], sr[1] = st[3];
     plat_mutex_unlock(&lock);
     if (toggle) menu_toggle();
-    if (overlay) menu_perf_cycle();
+    if (overlay) {   // Engage: L3+R3 toggle fast-forward (F10 still steps the overlay)
+        if (RT_ENGAGE) fast_forward_toggle();
+        else menu_perf_cycle();
+    }
     stick_bits(&b, sl[0], sl[1], B_SL_LEFT);
     stick_bits(&b, sr[0], sr[1], B_SR_LEFT);
     *buttons = b; *lx = sl[0]; *ly = sl[1]; *rx = sr[0]; *ry = sr[1];

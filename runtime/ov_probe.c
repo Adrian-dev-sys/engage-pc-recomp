@@ -71,6 +71,10 @@ static Ov ovs[] = {
     {"nfp.StopDetection", "_ZN2nn3nfp13StopDetectionERKNS0_12DeviceHandleE"},
     {"nfp.GetTagInfo", "_ZN2nn3nfp10GetTagInfoEPNS0_7TagInfoERKNS0_12DeviceHandleE"},
     {"nfp.GetModelInfo", "_ZN2nn3nfp12GetModelInfoEPNS0_9ModelInfoERKNS0_12DeviceHandleE"},
+    {"nfp.GetCommonInfo", "_ZN2nn3nfp13GetCommonInfoEPNS0_10CommonInfoERKNS0_12DeviceHandleE"},
+    {"nfp.Mount2", "_ZN2nn3nfp5MountERKNS0_12DeviceHandleENS0_9ModelTypeE"},
+    {"nfp.Unmount", "_ZN2nn3nfp7UnmountERKNS0_12DeviceHandleE"},
+    {"nfp.Restore", "_ZN2nn3nfp7RestoreERKNS0_12DeviceHandleE"},
     {"err.ShowError", "_ZN2nn3err9ShowErrorENS_6ResultE"},
     // SDK-internal (section 5.2)
     {"nndiagStartup", "nndiagStartup"},
@@ -358,17 +362,29 @@ static void probe_applet(void) {
     CHECK(CALL("nfp.Initialize", 0) == 0 && (uint32_t)CALL("nfp.GetState", 0) == 1, "nfp initialize");
     uint8_t handles[64];
     int32_t count = 7;
-    CHECK((uint32_t)CALL("nfp.ListDevices", U(handles), U(&count), 4) == 0x8073 && count == 0, "nfp ListDevices");
+    CHECK((uint32_t)CALL("nfp.ListDevices", U(handles), U(&count), 4) == 0 && count == 1, "nfp ListDevices");
     uint64_t ev = U(guest_alloc(0x100));
     CHECK(CALL("nfp.AttachAvailabilityChangeEvent", ev) == 0, "AttachAvailabilityChangeEvent");
-    int nfp_event = event_works(ev, 0);
-    CHECK(nfp_event, "the nfp availability event does not work as a manual-clear system event");
+    // The emulated reader is there from the start (amiibo.c): the availability event is set when it is attached
+    uint64_t try_wait = ldr_symbol(TRY_WAIT_SYSTEM_EVENT);
+    int nfp_event = try_wait && (uint8_t)rt_call(gc, try_wait, 1, ev) && (uint8_t)rt_call(gc, try_wait, 1, ev);
+    CHECK(nfp_event, "the nfp availability event is not set for the emulated reader, or clears itself");
     CHECK((uint32_t)CALL("nfp.GetDeviceState", U(handles)) == 0, "nfp device state");
-    static const char *const none[] = {"nfp.Mount", "nfp.GetNpadId", "nfp.AttachActivateEvent", "nfp.AttachDeactivateEvent",
-                                       "nfp.StartDetection", "nfp.StopDetection", "nfp.GetTagInfo", "nfp.GetModelInfo"};
+    uint32_t npad = 7;
+    CHECK(CALL("nfp.GetNpadId", U(&npad), U(handles)) == 0 && npad == 0, "nfp GetNpadId");
+    uint64_t activate = U(guest_alloc(0x100)), deactivate = U(guest_alloc(0x100));
+    CHECK(CALL("nfp.AttachActivateEvent", activate, U(handles)) == 0, "nfp AttachActivateEvent");
+    CHECK(CALL("nfp.AttachDeactivateEvent", deactivate, U(handles)) == 0, "nfp AttachDeactivateEvent");
+    CHECK(CALL("nfp.StartDetection", U(handles)) == 0 && (uint32_t)CALL("nfp.GetDeviceState", U(handles)) == 1,
+          "nfp StartDetection: searching");
+    CHECK(CALL("nfp.StopDetection", U(handles)) == 0, "nfp StopDetection");
+    CHECK(CALL("nfp.Unmount", U(handles)) == 0 && CALL("nfp.Restore", U(handles)) == 0, "nfp Unmount, Restore");
+    // The emulated reader (amiibo.c) with no amiibo on it: mounting and reading a tag find none
+    static const char *const none[] = {"nfp.Mount", "nfp.Mount2", "nfp.GetTagInfo", "nfp.GetModelInfo",
+                                       "nfp.GetCommonInfo"};
     uint8_t out[0x100];
     for (size_t i = 0; i < sizeof none / sizeof *none; i++) {
-        int first_is_handle = !strcmp(none[i], "nfp.Mount") || strstr(none[i], "Detection");
+        int first_is_handle = !strncmp(none[i], "nfp.Mount", 9);
         uint64_t r = first_is_handle ? CALL(none[i], U(handles), 0, 0) : CALL(none[i], U(out), U(handles));
         CHECK((uint32_t)r == 0x8073, "%s: %#x, not device-not-found", none[i], (uint32_t)r);
     }

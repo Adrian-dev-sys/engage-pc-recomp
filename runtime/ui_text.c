@@ -29,6 +29,33 @@ static const char *const text_en[UI_TEXT_COUNT] = {
     [UI_MENU_TITLE] = "Settings",
     [UI_MENU_TAB_SCREEN] = "Screen", [UI_MENU_TAB_GAME] = "Game", [UI_MENU_TAB_SOUND] = "Sound",
     [UI_MENU_TAB_CONTROLS] = "Controls", [UI_MENU_TAB_MENU] = "Menu", [UI_MENU_TAB_ADVANCED] = "Advanced",
+    [UI_MENU_FAST_FORWARD] = "Fast-forward speed",
+    [UI_MENU_FAST_FORWARD_DESC] = "How fast the game runs while fast-forward is on. T on the keyboard or both stick "
+                                  "clicks (L3+R3) on a gamepad turn it on and off. Music keeps its normal speed.",
+    [UI_MENU_FAST_FORWARD_BADGE] = ">> Fast-forward %ux",
+    [UI_MENU_MUTE_BACKGROUND] = "Mute in background",
+    [UI_MENU_MUTE_BACKGROUND_DESC] = "Silences the game while its window is not in front (with \"Keep running out of "
+                                     "focus\" on, the game keeps playing).",
+    [UI_MENU_SCREENSHOT_SAVED] = "Screenshot saved (F12)",
+    [UI_MENU_PLAYTIME] = "Play time", [UI_MENU_PLAYTIME_VALUE] = "%llu h %02llu min",
+    [UI_MENU_PLAYTIME_SESSION] = "this session %llu h %02llu min",
+    [UI_MENU_PLAYTIME_DESC] = "Time spent in the game on this PC, across runs. Kept in the profile folder "
+                              "(playtime.txt), next to the saves. Time with the window in the background does not count.",
+    [UI_MENU_TAB_AMIIBO] = "Amiibo", [UI_MENU_AMIIBO_READER] = "NFC reader", [UI_MENU_AMIIBO_STATE] = "Reader",
+    [UI_MENU_AMIIBO_STATE_DESC] = "What the game is doing with the emulated reader. In Engage, amiibo are read at the "
+                                  "amiibo gazebo in the Somniel: start the scan there, then pick an amiibo below.",
+    [UI_MENU_AMIIBO_STATE_IDLE] = "ready", [UI_MENU_AMIIBO_STATE_SEARCHING] = "the game is waiting for an amiibo",
+    [UI_MENU_AMIIBO_STATE_FOUND] = "amiibo on the reader", [UI_MENU_AMIIBO_STATE_MOUNTED] = "the game is reading it",
+    [UI_MENU_AMIIBO_STATE_OFF] = "off",
+    [UI_MENU_AMIIBO_REMOVE] = "Lift the amiibo", [UI_MENU_AMIIBO_REMOVE_DESC] = "Takes the amiibo off the reader.",
+    [UI_MENU_AMIIBO_AUTO_REMOVE] = "Lift it by itself",
+    [UI_MENU_AMIIBO_AUTO_REMOVE_DESC] = "Takes the amiibo off the reader 2.5 seconds after a tap, as a real tap would.",
+    [UI_MENU_AMIIBO_FILES] = "Amiibo dumps",
+    [UI_MENU_AMIIBO_NONE] = "No dumps yet. Put amiibo dumps (540-byte .bin or .nfc files) in the amiibo folder.",
+    [UI_MENU_AMIIBO_BAD] = "not a valid dump", [UI_MENU_AMIIBO_ON_READER] = "on the reader", [UI_MENU_AMIIBO_TAP] = "Tap",
+    [UI_MENU_AMIIBO_ROW_DESC] = "A puts this amiibo on the reader. Start the scan in the game first.",
+    [UI_MENU_AMIIBO_OPEN] = "Open amiibo folder",
+    [UI_MENU_AMIIBO_OPEN_DESC] = "Shows the folder the dumps are read from. It is created if it is missing.",
     [UI_MENU_TAB_MODS] = "Mods", [UI_MENU_MODS_INSTALLED] = "Installed mods",
     [UI_MENU_MODS_NONE] = "No mods yet. Unpack a mod into the mods folder, one folder per mod with its romfs folder "
                           "inside (the layout Ryujinx and Yuzu use), and restart the game.",

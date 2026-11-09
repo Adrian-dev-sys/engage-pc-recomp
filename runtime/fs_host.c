@@ -9,6 +9,7 @@
 //   <profile>/save-tx/                 the save mount's working copy and Commit's staging (section "save
 //                                      transactions")
 //   <profile>/save-backup/<time>/      the three committed saves before the current one
+//   <profile>/save-session/<time>/     the committed save as each of the last SESSION_BACKUPS starts found it
 //   <profile>/temp/                    emptied at start
 //   <profile>/cache/<index>/           cache storage
 //
@@ -558,6 +559,50 @@ static uint32_t save_commit(void) {
     return commit_run();
 }
 
+// ---- session backups: a copy of the committed save at each start, the newest SESSION_BACKUPS kept. The game saves
+// often, so the three commit backups can all be minutes old; these reach back a few play sessions.
+#define SESSION_BACKUPS 5
+static void session_backup(void) {
+    Listing l;
+    if (list_dir(save_root, &l) || !l.n) return;   // nothing saved yet
+    listing_free(l.e, l.n);
+    char root[PATH_CAP];
+    snprintf(root, sizeof root, "%s/save-session", profile);
+    make_dirs(root);
+    uint64_t ns = plat_unix_time_ns();
+    struct tm t;
+    plat_gmtime((int64_t)(ns / 1000000000u), &t);
+    char name[48];
+    snprintf(name, sizeof name, "%04d%02d%02d-%02d%02d%02d", t.tm_year + 1900, t.tm_mon + 1, t.tm_mday, t.tm_hour,
+             t.tm_min, t.tm_sec);
+    char *dst = join(root, name);
+    int nfiles = 0, nlinked = 0;
+    uint64_t bytes = 0;
+    if (!exists(dst)) {
+        if (copy_tree(save_root, dst, NULL, 0, &nfiles, &nlinked, &bytes)) {
+            rt_log("fs: session backup %s failed", dst);
+            remove_tree(dst);
+        } else {
+            rt_log("fs: session backup %s (%d files)", dst, nfiles);
+        }
+    }
+    free(dst);
+    static char names[64][48];
+    int n = 0;
+    if (list_dir(root, &l)) return;
+    for (int i = 0; i < l.n; i++)
+        if (l.e[i].kind == PLAT_FS_DIR && l.e[i].name[0] >= '0' && l.e[i].name[0] <= '9' && strlen(l.e[i].name) < 48 &&
+            n < 64)
+            strcpy(names[n++], l.e[i].name);
+    listing_free(l.e, l.n);
+    qsort(names, (size_t)n, sizeof *names, name_cmp);
+    for (int i = 0; i + SESSION_BACKUPS < n; i++) {
+        char *p = join(root, names[i]);
+        remove_tree(p);
+        free(p);
+    }
+}
+
 // ---- storage roots
 static void storage_init(void *param) {
     (void)param;
@@ -580,6 +625,7 @@ static void storage_init(void *param) {
     snprintf(old_root, sizeof old_root, "%s/old", tx_root);
     save_recover();   // before save_root is created: an absent save_root means a commit to complete
     make_dirs(save_root);
+    if (!rt_config()->seconds) session_backup();   // not for scripted runs
     snprintf(p, sizeof p, "%s/temp", profile);
     remove_tree(p);
     make_dirs(p);

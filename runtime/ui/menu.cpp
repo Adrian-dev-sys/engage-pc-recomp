@@ -42,6 +42,7 @@ extern "C" {
 #include "platform/platform.h"
 #include "sysinfo.h"
 #include "ui/menu.h"
+#include "ui/amiibo_tab.h"
 #include "ui_text.h"
 
 extern "C" const int rt_game_id;   // host.h: 0 TotK, 1 Engage
@@ -52,6 +53,9 @@ void vk_queue_lock(void);
 void vk_queue_unlock(void);
 void res_sizes(unsigned out[2], unsigned scene[2]);
 double frame_step_limit_hz(void);
+unsigned rt_speed(void);
+int playtime_get(uint64_t *total_s, uint64_t *session_s);
+int fast_forward_on(void);
 extern const int rt_game_id;
 extern const int rt_game_version;
 // fs.h (romfs.c): romfs-patches-xbox was next to romfs-index.bin at start, and was loaded.
@@ -367,7 +371,7 @@ extern "C" void menu_vk_release(void) {
 // TOTK_MENU_TEST_SET=<frame>:<key>=<value>[,<key>=<value>...][;<frame>:...]: cfg_set of each key (TOTK_ prefix
 // optional) at that presented frame; changes live settings with no input, menu open or not. totk.ini is written only by
 // the pseudo-key SAVE=1 (cfg_save, as a row change does; a failed write shows the menu's save note).
-enum { TAB_SCREEN, TAB_GAME, TAB_SOUND, TAB_CONTROLS, TAB_MENU, TAB_ADVANCED, TAB_MODS, TAB_COUNT };
+enum { TAB_SCREEN, TAB_GAME, TAB_SOUND, TAB_CONTROLS, TAB_AMIIBO, TAB_MENU, TAB_ADVANCED, TAB_MODS, TAB_COUNT };
 enum { TEST_PAGE_FRAMES = 30, TEST_SETS = 16 };
 struct TestSet { uint64_t frame; char key[64], value[64]; };
 static struct {
@@ -706,8 +710,21 @@ static void tab_mods(float scale) {
     opt_end();
 }
 
+// Play time across runs (playtime.c), with this session's in the note.
+static void row_playtime(void) {
+    uint64_t total, session;
+    if (!playtime_get(&total, &session)) return;
+    char value[64], note[64];
+    snprintf(value, sizeof value, menu_text(UI_MENU_PLAYTIME_VALUE), (unsigned long long)(total / 3600),
+             (unsigned long long)(total / 60 % 60));
+    snprintf(note, sizeof note, menu_text(UI_MENU_PLAYTIME_SESSION), (unsigned long long)(session / 3600),
+             (unsigned long long)(session / 60 % 60));
+    opt_text_row("##playtime", menu_text(UI_MENU_PLAYTIME), value, note, menu_text(UI_MENU_PLAYTIME_DESC), false);
+}
+
 static void tab_game(float scale) {
     opt_begin("##game", scale);
+    row_playtime();
     row_fps_limit();
     opt_toggle("TOTK_REALTIME", UI_MENU_REALTIME, UI_MENU_REALTIME_DESC);
     opt_toggle("TOTK_CLOTH_REALTIME", UI_MENU_CLOTH_REALTIME, UI_MENU_CLOTH_REALTIME_DESC);
@@ -716,12 +733,15 @@ static void tab_game(float scale) {
     static const UiTextId mode[] = {UI_MENU_MODE_DOCKED, UI_MENU_MODE_HANDHELD};
     opt_choice("TOTK_OPERATION_MODE", UI_MENU_OPERATION_MODE, mode, 2, UI_MENU_OPERATION_MODE_DESC);
     opt_toggle("TOTK_ASSUME_FOCUS", UI_MENU_ASSUME_FOCUS, UI_MENU_ASSUME_FOCUS_DESC);
+    if (rt_game_id == 1)
+        opt_slider("TOTK_FAST_FORWARD", UI_MENU_FAST_FORWARD, 2, 4, UI_MENU_FAST_FORWARD_DESC, 1, "%.0fx");
     opt_end();
 }
 
 static void tab_sound(float scale) {
     opt_begin("##sound", scale);
     opt_slider("TOTK_VOLUME", UI_MENU_VOLUME, 0, 100, UI_MENU_VOLUME_DESC, 5, "%.0f %%");
+    opt_toggle("TOTK_MUTE_BACKGROUND", UI_MENU_MUTE_BACKGROUND, UI_MENU_MUTE_BACKGROUND_DESC);
     opt_end();
 }
 
@@ -923,7 +943,7 @@ static void tab_advanced(float scale) {
 }
 
 static const UiTextId kTabNames[TAB_COUNT] = {UI_MENU_TAB_SCREEN, UI_MENU_TAB_GAME, UI_MENU_TAB_SOUND,
-                                              UI_MENU_TAB_CONTROLS, UI_MENU_TAB_MENU, UI_MENU_TAB_ADVANCED, UI_MENU_TAB_MODS};
+                                              UI_MENU_TAB_CONTROLS, UI_MENU_TAB_AMIIBO, UI_MENU_TAB_MENU, UI_MENU_TAB_ADVANCED, UI_MENU_TAB_MODS};
 static int g_tab;               // the tab shown
 static int g_tab_request = -1;  // select this tab at the next layout; -1 none
 static int g_focus_page = -1;   // this tab's first row takes the cursor once it is shown; -1 none
@@ -977,6 +997,7 @@ static void layout_menu(uint32_t w, uint32_t h, float scale) {
             case TAB_MENU: tab_menu(scale); break;
             case TAB_ADVANCED: tab_advanced(scale); break;
             case TAB_MODS: tab_mods(scale); break;
+            case TAB_AMIIBO: tab_amiibo(scale); break;
             }
             ImGui::EndTabItem();
         }
@@ -1251,8 +1272,41 @@ static void perf_draw(const MenuTarget *t, float scale) {
     dl->AddText(ImVec2(p.x + pad, p.y + pad), IM_COL32(255, 255, 255, 235), g_perf_text);
 }
 
+// ---- the status line at the top centre: fast-forward while it is on, a short notice (menu_toast) for 2 s
+static PlatMutex g_toast_lock = PLAT_MUTEX_INIT;
+static char g_toast[160];
+static std::atomic<uint64_t> g_toast_until{0};
+
+extern "C" void menu_toast(const char *msg) {
+    plat_mutex_lock(&g_toast_lock);
+    snprintf(g_toast, sizeof g_toast, "%s", msg);
+    plat_mutex_unlock(&g_toast_lock);
+    g_toast_until.store(plat_now_ns() + 2000000000ull);
+}
+
+static bool status_live(void) { return fast_forward_on() || plat_now_ns() < g_toast_until.load(); }
+
+static void status_draw(const MenuTarget *t, float scale) {
+    char text[200] = "";
+    if (plat_now_ns() < g_toast_until.load()) {
+        plat_mutex_lock(&g_toast_lock);
+        snprintf(text, sizeof text, "%s", g_toast);
+        plat_mutex_unlock(&g_toast_lock);
+    } else if (fast_forward_on()) {
+        snprintf(text, sizeof text, menu_text(UI_MENU_FAST_FORWARD_BADGE), rt_speed());
+    }
+    if (!text[0]) return;
+    ImDrawList *dl = ImGui::GetForegroundDrawList();
+    ImVec2 sz = ImGui::CalcTextSize(text);
+    float pad = 6 * scale;
+    ImVec2 p(((float)t->width - sz.x) / 2 - pad, 12 * scale);
+    dl->AddRectFilled(p, ImVec2(p.x + sz.x + pad * 2, p.y + sz.y + pad * 2), IM_COL32(0, 0, 0, 150), 4 * scale);
+    dl->AddText(ImVec2(p.x + pad, p.y + pad), IM_COL32(255, 255, 255, 235), text);
+}
+
 extern "C" int menu_overlay_frame(uint64_t frame, const MenuTarget *t, const char **shot) {
     *shot = NULL;
+    amiibo_frame();
     if (!g_test.parsed) test_parse();
     if (g_test.next_set < g_test.n_sets && frame >= g_test.sets[g_test.next_set].frame) test_apply_sets(frame);
     if (g_perf_save.exchange(0)) cfg_save();
@@ -1266,7 +1320,7 @@ extern "C" int menu_overlay_frame(uint64_t frame, const MenuTarget *t, const cha
             g_tab_request = 0;
             set_open(1);
             open = true;
-        } else if (!g_perf_mode) {
+        } else if (!g_perf_mode && !status_live()) {
             return 0;
         }
     }
@@ -1316,6 +1370,7 @@ extern "C" int menu_overlay_frame(uint64_t frame, const MenuTarget *t, const cha
     ImGui::NewFrame();
     if (open) layout_menu(t->width, t->height, scale);
     perf_draw(t, scale);
+    status_draw(t, scale);
     ImGui::Render();
     if (open) g_save_pending = opt_save_tick(0);
     g_cost_ns += plat_now_ns() - t0;
