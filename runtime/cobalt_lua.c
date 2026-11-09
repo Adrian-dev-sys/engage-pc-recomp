@@ -301,7 +301,10 @@ __attribute__((constructor)) static void actions_register(void) {
     for (size_t i = 0; i < NACTIONS; i++) rt_register_host(HOST_ACTIONS + 16 * i, actions[i].fn);
 }
 
-static uint64_t g_template, g_ftemplate;   // a game action / function delegate, seen at their registration
+// A game action / function delegate seen at its registration, copied at once: the delegate itself may be freed when
+// the game drops that script, and its memory reused.
+static uint8_t g_tdel[2][0x68], g_tmeth[2][0x58];
+static uint64_t g_template, g_ftemplate;   // nonzero once copied; the copies' addresses
 
 // Only a static method with one parameter (DynValue[] args) and no target will do: a lambda with a closure target gets
 // the target first and the arguments one register later (Il2CppDelegate: target +0x20, method +0x28; MethodInfo:
@@ -311,12 +314,19 @@ static int plain_static(uint64_t d) {
     uint64_t m = ld64(d + 0x28);
     return m && (*(const uint16_t *)(uintptr_t)(m + 0x44) & 0x10) && *(const uint8_t *)(uintptr_t)(m + 0x4a) == 1;
 }
+static uint64_t keep_template(int k, uint64_t d) {
+    memcpy(g_tdel[k], (const void *)(uintptr_t)d, sizeof g_tdel[k]);
+    memcpy(g_tmeth[k], (const void *)(uintptr_t)ld64(d + 0x28), sizeof g_tmeth[k]);
+    uint64_t m = (uint64_t)(uintptr_t)g_tmeth[k];
+    memcpy(g_tdel[k] + 0x28, &m, 8);
+    return (uint64_t)(uintptr_t)g_tdel[k];
+}
 static int regist_action(Cpu *c) {
-    if (!g_template && plain_static(c->x[1])) g_template = c->x[1];
+    if (!g_template && plain_static(c->x[1])) g_template = keep_template(0, c->x[1]);
     return 0;
 }
 static int regist_function(Cpu *c) {
-    if (!g_ftemplate && plain_static(c->x[1])) g_ftemplate = c->x[1];
+    if (!g_ftemplate && plain_static(c->x[1])) g_ftemplate = keep_template(1, c->x[1]);
     return 0;
 }
 

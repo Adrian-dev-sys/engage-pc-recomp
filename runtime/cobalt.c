@@ -18,6 +18,7 @@
 
 #include "cobalt.h"
 #include "cobalt_lua.h"
+#include "cobalt_sprite.h"
 #include "cobalt_support.h"
 #include "cobalt_voice.h"
 #include "fs.h"
@@ -1527,6 +1528,8 @@ static void hooks_init(void) {
         }
     }
     cobalt_support_init();
+    for (int i = 0; i < norder; i++) cobalt_sprite_add_mod(mods_at(order[i])->romfs);
+    cobalt_sprite_init();
     for (int i = 0; i < norder; i++) plat_fs_list(mods_at(order[i])->romfs, lua_cb, (void *)mods_at(order[i])->romfs);
     cobalt_lua_init();
 }
