@@ -16,3 +16,4 @@ uint64_t hook_original(Cpu *c, const char *name, uint64_t a0, uint64_t a1, uint6
 uint64_t hook_main(uint64_t offset);               // main's guest address of a module offset
 // Calls the guest function at addr with up to 4 arguments from a hook; returns x0, the Cpu's registers kept.
 uint64_t guest_call(Cpu *c, uint64_t addr, uint64_t a0, uint64_t a1, uint64_t a2, uint64_t a3);
+uint64_t guest_call6(Cpu *c, uint64_t addr, uint64_t a0, uint64_t a1, uint64_t a2, uint64_t a3, uint64_t a4, uint64_t a5);

@@ -87,9 +87,13 @@ uint64_t hook_original(Cpu *c, const char *name, uint64_t a0, uint64_t a1, uint6
 uint64_t hook_main(uint64_t offset) { return MOD_MAIN_BASE + offset; }
 
 uint64_t guest_call(Cpu *c, uint64_t addr, uint64_t a0, uint64_t a1, uint64_t a2, uint64_t a3) {
+    return guest_call6(c, addr, a0, a1, a2, a3, 0, 0);
+}
+
+uint64_t guest_call6(Cpu *c, uint64_t addr, uint64_t a0, uint64_t a1, uint64_t a2, uint64_t a3, uint64_t a4, uint64_t a5) {
     uint64_t keep[19], lr = c->x[30];   // x0..x18: the hook's caller may still need them
     memcpy(keep, c->x, sizeof keep);
-    uint64_t r = rt_call(c, addr, 4, a0, a1, a2, a3);
+    uint64_t r = rt_call(c, addr, 6, a0, a1, a2, a3, a4, a5);
     memcpy(c->x, keep, sizeof keep);
     c->x[30] = lr;
     return r;

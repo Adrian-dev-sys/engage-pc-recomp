@@ -1603,10 +1603,12 @@ int kern_thread_state(uint32_t h) {
     return r;
 }
 
+static void se_forget(uint32_t wh);
+
 // CloseHandle: an event goes with its last end; a thread object once it has also exited.
 static uint32_t handle_close(uint32_t h) {
     unsigned i = h - 0x1000;
-    int ok = 0, kind = 0;
+    int ok = 0, kind = 0, writable = 0;
     void *ipc = NULL;
     lock();
     if (i > 0 && i < MAX_H) {
@@ -1615,7 +1617,7 @@ static uint32_t handle_close(uint32_t h) {
         if (type == O_EVENT_R || type == O_EVENT_W) {
             Event *e = o;
             if (--e->refs == 0) free(e);
-            ok = 1;
+            ok = 1, writable = type == O_EVENT_W;
         } else if (type == O_SESSION || type == O_TMEM) {
             kind = type;
             ipc = o;
@@ -1633,6 +1635,7 @@ static uint32_t handle_close(uint32_t h) {
     }
     unlock();
     if (ipc) ipc_handle_closed(kind, ipc);
+    if (writable) se_forget(h);   // a system event the game destroyed; its address may hold a new one later
     return ok ? R_OK : R_BAD_HANDLE;
 }
 
@@ -2147,6 +2150,14 @@ static uint32_t se_find(uint64_t ev) {
         if (g_se[i].ev == ev) wh = g_se[i].wh;
     plat_mutex_unlock_shared(&g_se_lock);
     return wh;
+}
+
+static void se_forget(uint32_t wh) {
+    plat_mutex_lock(&g_se_lock);
+    for (int i = 0; i < g_nse;)
+        if (g_se[i].wh == wh) g_se[i] = g_se[--g_nse];
+        else i++;
+    plat_mutex_unlock(&g_se_lock);
 }
 
 void kern_bind_system_event(Cpu *c, uint64_t ev, int autoclear) {

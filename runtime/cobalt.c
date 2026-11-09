@@ -17,6 +17,7 @@
 #include <strings.h>
 
 #include "cobalt.h"
+#include "cobalt_lua.h"
 #include "cobalt_voice.h"
 #include "fs.h"
 #include "hooks.h"
@@ -1498,6 +1499,24 @@ static void key_of(char hex[65]) {
     for (int i = 0; i < 32; i++) snprintf(hex + 2 * i, 3, "%02x", md[i]);
 }
 
+// Root-level <mod>/<Name>.lua files, in merge order (cobalt_lua.c runs them at the Somniel).
+static int lua_cb(const char *name, int kind, uint64_t size, void *ctx) {
+    (void)size;
+    const char *root = ctx;
+    if (kind != PLAT_FS_FILE || name[0] == '.' || !ends_ci(name, ".lua")) return 1;
+    char file[2600], stem[128];
+    snprintf(file, sizeof file, "%s/%s", root, name);
+    snprintf(stem, sizeof stem, "%.*s", (int)(strlen(name) - 4), name);
+    cobalt_lua_add(file, stem);
+    return 1;
+}
+
+static void hooks_init(void) {
+    audio_init();
+    for (int i = 0; i < norder; i++) plat_fs_list(mods_at(order[i])->romfs, lua_cb, (void *)mods_at(order[i])->romfs);
+    cobalt_lua_init();
+}
+
 static void register_outputs(void) {
     for (int i = 0; i < noutputs; i++) {
         char path[2600];
@@ -1538,7 +1557,7 @@ void cobalt_bake(void) {
         if (ok) {
             rt_log("cobalt: %d mod(s), %d merged file(s) from the cache (%s)", norder, noutputs, cache_dir);
             register_outputs();
-            audio_init();
+            hooks_init();
             return;
         }
     } else {
@@ -1558,5 +1577,5 @@ void cobalt_bake(void) {
     rt_log("cobalt: %d mod(s) merged into %d file(s) in %.1f s (%s)", norder, noutputs,
            (double)plat_now_ns() / 1e9 - t0, cache_dir);
     register_outputs();
-    audio_init();
+    hooks_init();
 }
