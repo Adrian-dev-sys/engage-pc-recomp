@@ -250,6 +250,9 @@ void res_rt_seen(unsigned w, unsigned h, int fmt) {
 
 static void engage_res_init(void) {
     decide();
+    // the set uwui gives the UI code a 16:9 screen width: right only on an output wider than 16:9
+    int uwui = rt_patch_set("uwui");
+    if (uwui >= 0 && (uint64_t)R.ow * 9 <= (uint64_t)R.oh * 16) rt_patch_switch(uwui, 0);
     const char *s = cfg_value("TOTK_RENDER_SCALE");
     double k = strcmp(s, "game") ? strtod(s, NULL) / 100.0 : 1.0;
     if (k < 0.25 || k > 4.0) k = 1.0;

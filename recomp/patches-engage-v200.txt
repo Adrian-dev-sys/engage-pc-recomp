@@ -114,7 +114,118 @@ site fullres main 2011bdc 4ea81d00 1e2e1000   # mov v0.16b, v8.16b -> fmov s0, #
 # one 16:9 shows and the extra width shows more at the sides. s1 and s2 are written right after the site.
 set uwfov TOTK_ULTRAWIDE_FOV 1
 site uwfov main 7598a0 1e201980 1e201980 1e2c5001 1e210941 1e2e1002 1e224821 1e211800   # cot(fov/2) /= max(1, aspect * 9/16)
+# UnityEngine.UI.CanvasScaler.HandleScaleWithScreenSize: the UI scaled with the width, too large on a wider screen. The
+# screen match mode reads 1 (Expand: the smaller of width and height scale), which is the 16:9 size at any width.
+site uwfov main 317ce58 b9402e68 52800028   # ldr w8, [x19, #0x2c] (m_ScreenMatchMode) -> mov w8, #1 (Expand)
 
+
+# The game's UI code sizes the UI by Screen.width / 1920 (BasicMenuContent.GetScreenScale, cursors, GX matrices):
+# with the Expand canvas (set uwfov) that is wrong on a wider screen. These calls get a 16:9 width, height * 16 / 9
+# (get_height, then * 16 / 9 at the next instruction; x9 is free after a call). resolution.c switches the set off
+# unless the output is wider than 16:9.
+set uwui TOTK_ULTRAWIDE_FOV 1
+site uwui main 1bb9014 944f4a43 944f4a53   # BasicMenuContent.Cursor.Tick: get_width -> get_height
+site uwui main 1bb9018 1e220000 52800209 1b097c00 52800129 1ac90800 1e220000   #   ... * 16 / 9, then scvtf s0, w0
+site uwui main 1c81ec4 944c2697 944c26a7   # Ut.CaptureTexture: get_width -> get_height
+site uwui main 1c81ec8 2a0003f6 52800209 1b097c00 52800129 1ac90800 2a0003f6   #   ... * 16 / 9, then mov w22, w0
+site uwui main 1c81f00 944c2688 944c2698   # Ut.CaptureTexture: get_width -> get_height
+site uwui main 1c81f04 2a0003f6 52800209 1b097c00 52800129 1ac90800 2a0003f6   #   ... * 16 / 9, then mov w22, w0
+site uwui main 1c81f98 944c2662 944c2672   # Ut.CaptureTexture: get_width -> get_height
+site uwui main 1c81f9c 1b187c08 52800209 1b097c00 52800129 1ac90800 1b187c08   #   ... * 16 / 9, then mul w8, w0, w24
+site uwui main 1ce0ef0 944aaa8c 944aaa9c   # HelpManager.Item..ctor: get_width -> get_height
+site uwui main 1ce0ef4 1e220000 52800209 1b097c00 52800129 1ac90800 1e220000   #   ... * 16 / 9, then scvtf s0, w0
+site uwui main 1ce0f80 944aaa68 944aaa78   # HelpManager.Item..ctor: get_width -> get_height
+site uwui main 1ce0f84 1e220000 52800209 1b097c00 52800129 1ac90800 1e220000   #   ... * 16 / 9, then scvtf s0, w0
+site uwui main 205f29c 943cb1a1 943cb1b1   # Combat.Kaneko.GUIFitToScreen: get_width -> get_height
+site uwui main 205f2a0 2a0003f3 52800209 1b097c00 52800129 1ac90800 2a0003f3   #   ... * 16 / 9, then mov w19, w0
+site uwui main 2085cc8 943c1716 943c1726   # MapInfoRoot.UpdateCanvas: get_width -> get_height
+site uwui main 2085ccc 2a0003f7 52800209 1b097c00 52800129 1ac90800 2a0003f7   #   ... * 16 / 9, then mov w23, w0
+site uwui main 209b298 943bc1a2 943bc1b2   # MyRoomWakeupSelectRoot.CursorTop.Reset: get_width -> get_height
+site uwui main 209b29c 1e220000 52800209 1b097c00 52800129 1ac90800 1e220000   #   ... * 16 / 9, then scvtf s0, w0
+site uwui main 209b3a8 943bc15e 943bc16e   # MyRoomWakeupSelectRoot.CursorTop.GetPositionY: get_width -> get_height
+site uwui main 209b3ac 1e220000 52800209 1b097c00 52800129 1ac90800 1e220000   #   ... * 16 / 9, then scvtf s0, w0
+site uwui main 209ba6c 943bbfad 943bbfbd   # MyRoomWakeupSelectRoot.CursorTop.Update: get_width -> get_height
+site uwui main 209ba70 1e220000 52800209 1b097c00 52800129 1ac90800 1e220000   #   ... * 16 / 9, then scvtf s0, w0
+site uwui main 209bab4 943bbf9b 943bbfab   # MyRoomWakeupSelectRoot.CursorTop.Update: get_width -> get_height
+site uwui main 209bab8 1e220000 52800209 1b097c00 52800129 1ac90800 1e220000   #   ... * 16 / 9, then scvtf s0, w0
+site uwui main 215a248 9438c5b6 9438c5c6   # HelpParamSetter.MoveCursor: get_width -> get_height
+site uwui main 215a24c 1e22000a 52800209 1b097c00 52800129 1ac90800 1e22000a   #   ... * 16 / 9, then scvtf s10, w0
+site uwui main 21ab184 943781e7 943781f7   # Combat.SharedCanvas.FromLeft: get_width -> get_height
+site uwui main 21ab188 7100001f 52800209 1b097c00 52800129 1ac90800 7100001f   #   ... * 16 / 9, then cmp w0, #0
+site uwui main 21ab1b4 943781db 943781eb   # Combat.SharedCanvas.FromRight: get_width -> get_height
+site uwui main 21ab1b8 7100001f 52800209 1b097c00 52800129 1ac90800 7100001f   #   ... * 16 / 9, then cmp w0, #0
+site uwui main 21ab26c 943781ad 943781bd   # Combat.SharedCanvas.X: get_width -> get_height
+site uwui main 21ab270 2a0003f3 52800209 1b097c00 52800129 1ac90800 2a0003f3   #   ... * 16 / 9, then mov w19, w0
+site uwui main 21ab278 943781aa 943781ba   # Combat.SharedCanvas.X: get_width -> get_height
+site uwui main 21ab27c 1e220260 52800209 1b097c00 52800129 1ac90800 1e220260   #   ... * 16 / 9, then scvtf s0, w19
+site uwui main 21ab32c 9437817d 9437818d   # Combat.SharedCanvas.XY: get_width -> get_height
+site uwui main 21ab330 2a0003f4 52800209 1b097c00 52800129 1ac90800 2a0003f4   #   ... * 16 / 9, then mov w20, w0
+site uwui main 21ab338 9437817a 9437818a   # Combat.SharedCanvas.XY: get_width -> get_height
+site uwui main 21ab33c 1e220280 52800209 1b097c00 52800129 1ac90800 1e220280   #   ... * 16 / 9, then scvtf s0, w20
+site uwui main 2262d38 9434a2fa 9434a30a   # PhotographModeSequence.<PhotographCoroutine>d__10.MoveNext: get_width -> get_height
+site uwui main 2262d3c 2a0003f4 52800209 1b097c00 52800129 1ac90800 2a0003f4   #   ... * 16 / 9, then mov w20, w0
+site uwui main 2262d94 9434a2e3 9434a2f3   # PhotographModeSequence.<PhotographCoroutine>d__10.MoveNext: get_width -> get_height
+site uwui main 2262d98 2a0003f6 52800209 1b097c00 52800129 1ac90800 2a0003f6   #   ... * 16 / 9, then mov w22, w0
+site uwui main 2263554 9434a0f3 9434a103   # PhotographModeSequence.<PhotographCoroutine>d__10.MoveNext: get_width -> get_height
+site uwui main 2263558 f94002a8 52800209 1b097c00 52800129 1ac90800 f94002a8   #   ... * 16 / 9, then ldr x8, [x21]
+site uwui main 2277124 943451ff 9434520f   # GX.GetAnchorPos: get_width -> get_height
+site uwui main 2277128 2a0003f4 52800209 1b097c00 52800129 1ac90800 2a0003f4   #   ... * 16 / 9, then mov w20, w0
+site uwui main 2277504 94345107 94345117   # GX.GetScreenSpaceMatrix: get_width -> get_height
+site uwui main 2277508 1e220008 52800209 1b097c00 52800129 1ac90800 1e220008   #   ... * 16 / 9, then scvtf s8, w0
+site uwui main 227754c 943450f5 94345105   # GX.GetScreenSpaceMatrix: get_width -> get_height
+site uwui main 2277550 2a0003f5 52800209 1b097c00 52800129 1ac90800 2a0003f5   #   ... * 16 / 9, then mov w21, w0
+site uwui main 22d2240 9432e5b8 9432e5c8   # DragonRideTargetPopup.Update: get_width -> get_height
+site uwui main 22d2244 aa1f03e0 52800209 1b097c00 52800129 1ac90800 aa1f03e0   #   ... * 16 / 9, then mov x0, xzr
+site uwui main 2321b44 9431a777 9431a787   # ProfileCardRoot.AddFreeStamp: get_width -> get_height
+site uwui main 2321b48 1e220000 52800209 1b097c00 52800129 1ac90800 1e220000   #   ... * 16 / 9, then scvtf s0, w0
+site uwui main 2322770 9431a46c 9431a47c   # ProfileCardRoot.GetOverlappedStampIndex: get_width -> get_height
+site uwui main 2322774 2a0003f8 52800209 1b097c00 52800129 1ac90800 2a0003f8   #   ... * 16 / 9, then mov w24, w0
+site uwui main 2322d3c 9431a2f9 9431a309   # ProfileCardRoot.GetRect: get_width -> get_height
+site uwui main 2322d40 1e220000 52800209 1b097c00 52800129 1ac90800 1e220000   #   ... * 16 / 9, then scvtf s0, w0
+site uwui main 2454a88 942cdba6 942cdbb6   # BasicDialogContent.CalcCursorMovedPosY: get_width -> get_height
+site uwui main 2454a8c 1e220000 52800209 1b097c00 52800129 1ac90800 1e220000   #   ... * 16 / 9, then scvtf s0, w0
+site uwui main 2454b8c 942cdb65 942cdb75   # BasicMenuContent.GetScreenScale: get_width -> get_height
+site uwui main 2454b90 1e220000 52800209 1b097c00 52800129 1ac90800 1e220000   #   ... * 16 / 9, then scvtf s0, w0
+site uwui main 2456a80 942cd3a8 942cd3b8   # BasicItemMenuContent.CalcCursorMovedPosY: get_width -> get_height
+site uwui main 2456a84 1e220008 52800209 1b097c00 52800129 1ac90800 1e220008   #   ... * 16 / 9, then scvtf s8, w0
+site uwui main 245d81c 942cb841 942cb851   # BasicMenuContent.MoveFrontCursorFrom: get_width -> get_height
+site uwui main 245d820 1e220000 52800209 1b097c00 52800129 1ac90800 1e220000   #   ... * 16 / 9, then scvtf s0, w0
+site uwui main 2462f30 942ca27c 942ca28c   # BasicMenuContent.CalcCursorMovedPosY: get_width -> get_height
+site uwui main 2462f34 2a0003f5 52800209 1b097c00 52800129 1ac90800 2a0003f5   #   ... * 16 / 9, then mov w21, w0
+site uwui main 25f7e64 94264eaf 94264ebf   # Chara.CharacterViewer.OnGUI: get_width -> get_height
+site uwui main 25f7e68 29452279 52800209 1b097c00 52800129 1ac90800 29452279   #   ... * 16 / 9, then ldp w25, w8, [x19, #0x28]
+site uwui main 27b76b8 941f509a 941f50aa   # AccessoryEquipmentInfo.ShowCursor: get_width -> get_height
+site uwui main 27b76bc 1e220000 52800209 1b097c00 52800129 1ac90800 1e220000   #   ... * 16 / 9, then scvtf s0, w0
+site uwui main 27b7a70 941f4fac 941f4fbc   # AccessoryEquipmentInfo.ShowCursor: get_width -> get_height
+site uwui main 27b7a74 1e220000 52800209 1b097c00 52800129 1ac90800 1e220000   #   ... * 16 / 9, then scvtf s0, w0
+site uwui main 27dafcc 941ec255 941ec265   # Combat.CharacterConfig.InternalGUI: get_width -> get_height
+site uwui main 27dafd0 1e220000 52800209 1b097c00 52800129 1ac90800 1e220000   #   ... * 16 / 9, then scvtf s0, w0
+site uwui main 290bc10 9419ff44 9419ff54   # Viewer.IMenuElement.Draw: get_width -> get_height
+site uwui main 290bc14 528aaac8 52800209 1b097c00 52800129 1ac90800 528aaac8   #   ... * 16 / 9, then mov w8, #0x5556
+site uwui main 290bc9c 9419ff21 9419ff31   # Viewer.IMenuElement.Draw: get_width -> get_height
+site uwui main 290bca0 b9406298 52800209 1b097c00 52800129 1ac90800 b9406298   #   ... * 16 / 9, then ldr w24, [x20, #0x60]
+site uwui main 29338b4 9419601b 9419602b   # Combat.CombatTimespace.InternalGUI: get_width -> get_height
+site uwui main 29338b8 51010008 52800209 1b097c00 52800129 1ac90800 51010008   #   ... * 16 / 9, then sub w8, w0, #0x40
+site uwui main 2978b68 94184b6e 94184b7e   # Combat.HUDPopup.Update: get_width -> get_height
+site uwui main 2978b6c 2a0003f4 52800209 1b097c00 52800129 1ac90800 2a0003f4   #   ... * 16 / 9, then mov w20, w0
+site uwui main 2979da8 941846de 941846ee   # Combat.HUDPopupGroup.Update: get_width -> get_height
+site uwui main 2979dac 2a0003f4 52800209 1b097c00 52800129 1ac90800 2a0003f4   #   ... * 16 / 9, then mov w20, w0
+site uwui main 2bf75c8 940e50d6 940e50e6   # ProfileCardStampMenu.ACall: get_width -> get_height
+site uwui main 2bf75cc f9405a68 52800209 1b097c00 52800129 1ac90800 f9405a68   #   ... * 16 / 9, then ldr x8, [x19, #0xb0]
+site uwui main 2bf886c 940e4c2d 940e4c3d   # ProfileCardStampMenu.DirCall: get_width -> get_height
+site uwui main 2bf8870 1e220000 52800209 1b097c00 52800129 1ac90800 1e220000   #   ... * 16 / 9, then scvtf s0, w0
+site uwui main 2bf8cc0 940e4b18 940e4b28   # ProfileCardStampRoot.MoveStamp: get_width -> get_height
+site uwui main 2bf8cc4 1e220000 52800209 1b097c00 52800129 1ac90800 1e220000   #   ... * 16 / 9, then scvtf s0, w0
+site uwui main 2bf8ff4 940e4a4b 940e4a5b   # ProfileCardStampRoot.GetIconRect: get_width -> get_height
+site uwui main 2bf8ff8 1e220000 52800209 1b097c00 52800129 1ac90800 1e220000   #   ... * 16 / 9, then scvtf s0, w0
+site uwui main 2bf91b4 940e49db 940e49eb   # ProfileCardStampRoot.GetStampRect: get_width -> get_height
+site uwui main 2bf91b8 d001b916 52800209 1b097c00 52800129 1ac90800 d001b916   #   ... * 16 / 9, then adrp x22, #0x631b000
+site uwui main 2bf9534 940e48fb 940e490b   # ProfileCardStampMenu.PutStamp: get_width -> get_height
+site uwui main 2bf9538 1e22000a 52800209 1b097c00 52800129 1ac90800 1e22000a   #   ... * 16 / 9, then scvtf s10, w0
+site uwui main 2bfb7f8 940e404a 940e405a   # ProfileCardStampRoot.Start: get_width -> get_height
+site uwui main 2bfb7fc 1e220000 52800209 1b097c00 52800129 1ac90800 1e220000   #   ... * 16 / 9, then scvtf s0, w0
+site uwui main 2bfb8f0 940e400c 940e401c   # ProfileCardStampRoot.ResetStampPosition: get_width -> get_height
+site uwui main 2bfb8f4 1e220000 52800209 1b097c00 52800129 1ac90800 1e220000   #   ... * 16 / 9, then scvtf s0, w0
 
 # Resolution: Unity's 1920x1080 screen size, swapchain textures and size cap read page+0x50 (width) and +0x54
 # (height), written by runtime/resolution.c engage_res_init from output_res * render_scale. On when not 1920x1080.
