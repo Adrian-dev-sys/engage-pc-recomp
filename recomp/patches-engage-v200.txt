@@ -109,6 +109,13 @@ site fps60 main 25b5ff8 aa1f03e0 aa1f03e0 @page:x9 bd405924 1e240842   # emblem 
 set fullres TOTK_FULL_RES 1
 site fullres main 2011bdc 4ea81d00 1e2e1000   # mov v0.16b, v8.16b -> fmov s0, #1.0 (the scale SetRenderScale gets)
 
+# Unity's Matrix4x4::SetPerspective (main+0x75983c): Engage's cameras keep their horizontal view, so a wider screen saw
+# less vertically ("zoomed in"). Wider than 16:9, cot(fov/2) is divided by aspect / (16/9): the vertical view is the
+# one 16:9 shows and the extra width shows more at the sides. s1 and s2 are written right after the site.
+set uwfov TOTK_ULTRAWIDE_FOV 1
+site uwfov main 7598a0 1e201980 1e201980 1e2c5001 1e210941 1e2e1002 1e224821 1e211800   # cot(fov/2) /= max(1, aspect * 9/16)
+
+
 # Resolution: Unity's 1920x1080 screen size, swapchain textures and size cap read page+0x50 (width) and +0x54
 # (height), written by runtime/resolution.c engage_res_init from output_res * render_scale. On when not 1920x1080.
 set engres TOTK_ENGAGE_RES 0

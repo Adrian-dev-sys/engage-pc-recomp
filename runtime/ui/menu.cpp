@@ -642,6 +642,9 @@ static void tab_screen(float scale) {
                                           UI_MENU_DLSS_PRESET_E};
         opt_choice("TOTK_DLSS_PRESET", UI_MENU_DLSS_PRESET, preset, 4, UI_MENU_DLSS_PRESET_DESC);
         opt_slider("TOTK_RT_SUPERSAMPLE", UI_MENU_RT_SUPERSAMPLE, 1, 4, UI_MENU_RT_SUPERSAMPLE_DESC, 1, "%.0fx");
+        opt_group(UI_MENU_UW);
+        opt_toggle("TOTK_ULTRAWIDE_FOV", UI_MENU_UW_FOV, UI_MENU_UW_FOV_DESC);
+        opt_toggle("TOTK_MOVIE_16X9", UI_MENU_MOVIE_16X9, UI_MENU_MOVIE_16X9_DESC);
     }
     opt_end();
 }

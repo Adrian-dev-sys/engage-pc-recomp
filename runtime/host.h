@@ -242,6 +242,7 @@ void account_uid(uint64_t out[2]);                         // the local user's n
                                                            // <profile>/account.uid; fs_host.c names save data after it
 
 // ---- movies (ov_movie.c)
+int movie_playing(void);                                   // a movie frame was handed over in the last 200 ms
 void movie_tick(Cpu *c);                                   // at every present, on the presenting guest thread: hands
                                                            // decoded movie frames over when due, signals their events
 // ---- game resolution (resolution.c): TOTK_OUTPUT_RES, TOTK_RENDER_SCALE

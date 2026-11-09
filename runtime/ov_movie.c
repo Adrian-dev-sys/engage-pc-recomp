@@ -88,6 +88,7 @@ static Movie *g_movies[MAX_MOVIES];
 static volatile int32_t g_count;                // live host decoders: movie_tick returns at once when 0
 static PlatMutex g_lock = PLAT_MUTEX_INIT;        // lock order: g_lock, then Movie.mu
 static uint64_t (*g_clock)(void) = kern_now_ns;
+static uint64_t g_last_handed;   // kern_now_ns of the last frame handed over (movie_playing)
 static int g_pace = -1;
 
 void movie_set_clock(uint64_t (*clock)(void)) { g_clock = clock ? clock : kern_now_ns; }
@@ -396,7 +397,16 @@ static void release_due(Movie *m, uint64_t now) {
     memmove(m->decoded, m->decoded + 1, (size_t)--m->ndecoded * sizeof *m->decoded);
     m->ready[m->nready++] = d;
     m->st.handed++;
+    __atomic_store_n(&g_last_handed, kern_now_ns(), __ATOMIC_RELAXED);
     m->owed |= 1u << MOVIE_EV_OUTPUT;
+}
+
+// A movie frame was handed over in the last 200 ms (gfx_present.c: Engage's movies stay 16:9 on a wider window).
+// A movie frame was handed over in the last 200 ms (gfx_present.c: Engage's movies stay 16:9 on a wider window; Unity's
+// VideoPlayer decodes them through this host decoder).
+int movie_playing(void) {
+    uint64_t t = __atomic_load_n(&g_last_handed, __ATOMIC_RELAXED);
+    return t && kern_now_ns() - t < 200000000ull;
 }
 
 void movie_tick(Cpu *c) {
