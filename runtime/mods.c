@@ -67,6 +67,21 @@ static int ends_with_ci(const char *s, const char *tail) {
     return n >= t && !strcasecmp(s + n - t, tail);
 }
 
+// A Cobalt mod's root: config.yaml, or a Data or patches folder (Cobalt's layout has no romfs folder).
+static int cobalt_layout(const char *mod) {
+    static const char *const marks[] = {"config.yaml", "Data", "patches"};
+    char p[2200];
+    for (size_t i = 0; i < sizeof marks / sizeof *marks; i++)
+        if (snprintf(p, sizeof p, "%s/%s", mod, marks[i]) < (int)sizeof p && plat_fs_kind(p) != PLAT_FS_MISSING) return 1;
+    return 0;
+}
+
+static int nro_cb(const char *name, int kind, uint64_t size, void *ctx) {
+    (void)size;
+    if (kind == PLAT_FS_FILE && ends_with_ci(name, ".nro")) *(int *)ctx |= MOD_NRO;
+    return 1;
+}
+
 // What the ExeFS folder holds: MOD_EXEFS for patches (.ips, .pchtxt), MOD_SUBSDK for code modules. main.npdm alone is
 // metadata, not code.
 static int exefs_cb(const char *name, int kind, uint64_t size, void *ctx) {
@@ -141,6 +156,11 @@ static int scan_cb(const char *name, int kind, uint64_t size, void *ctx) {
     find_root(path, "romfs", m->romfs, sizeof m->romfs);
     if (!m->romfs[0]) find_root(path, "romfslite", m->romfs, sizeof m->romfs);
     find_root(path, "exefs", m->exefs, sizeof m->exefs);
+    if (!m->romfs[0] && cobalt_layout(path)) {   // Cobalt (sd:/engage/mods/<mod>): the root is the RomFS
+        snprintf(m->romfs, sizeof m->romfs, "%s", path);
+        m->kind |= MOD_COBALT;
+        plat_fs_list(path, nro_cb, &m->kind);
+    }
     if (m->romfs[0] && has_file(m->romfs)) m->kind |= MOD_ROMFS;
     if (m->exefs[0]) plat_fs_list(m->exefs, exefs_cb, &m->kind);
     char patches[2200];
@@ -189,9 +209,12 @@ void mods_scan(void) {
         snprintf(start_order[i], sizeof start_order[i], "%s", mods[i].name);
         start_enabled[i] = mods[i].enabled;
         const ModInfo *m = &mods[i];
-        rt_log("mods: %s: %s,%s%s%s%s, %s", m->name, m->enabled ? "on" : "off", m->kind & MOD_ROMFS ? " romfs" : "",
-               m->kind & MOD_EXEFS ? " exefs" : "", m->kind & MOD_SUBSDK ? " subsdk" : "", m->kind ? "" : " no files",
-               problem_name(m->problem));
+        rt_log("mods: %s: %s,%s%s%s%s%s, %s", m->name, m->enabled ? "on" : "off", m->kind & MOD_ROMFS ? " romfs" : "",
+               m->kind & MOD_COBALT ? " cobalt" : "", m->kind & MOD_EXEFS ? " exefs" : "",
+               m->kind & MOD_SUBSDK ? " subsdk" : "", m->kind ? "" : " no files", problem_name(m->problem));
+        if (m->kind & MOD_NRO)
+            rt_log("mods: %s: has a Cobalt code plugin (.nro), which the recompiled game cannot run; its data loads, "
+                   "features that need the plugin are missing", m->name);
     }
     rt_log("mods: %d folders in %s", nmods, dir);
 }

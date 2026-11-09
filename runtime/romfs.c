@@ -26,6 +26,7 @@
 #include <strings.h>
 
 #include "cfg.h"
+#include "cobalt.h"
 #include "fs.h"
 #include "host.h"
 #include "mods.h"
@@ -37,6 +38,7 @@
 #define NH 65536                     // RomFS handle slots
 #define READ_CHUNK (64u << 20)       // largest single read
 #define HASH_CHUNK (8u << 20)
+#define COBALT_PRIO (1 << 20)        // the prio of the Cobalt merge's files: above every mod
 #define ADDED UINT64_MAX             // an added overlay file's index until overlay_init numbers it
 
 typedef struct { uint64_t offset, size; uint32_t name, len; } Entry;
@@ -431,11 +433,15 @@ static int mod_walk_cb(const char *leaf, int kind, uint64_t size, void *ctx) {
         rt_log("mods: %s: path too long under %s; left out", m->name, w->dir);
         return 1;
     }
+    // macOS archive junk (.DS_Store, ._*, __MACOSX) is never game data.
+    if (leaf[0] == '.' || !strcmp(leaf, "__MACOSX")) return 1;
     if (kind == PLAT_FS_DIR) {
         mod_walk(w->k, w->prio, file, path);
         return 1;
     }
     if (kind != PLAT_FS_FILE) return 1;
+    // A Cobalt mod's catalog.json / catalog.meta are Cobalt's own cache; cobalt.c builds the catalog instead.
+    if ((m->kind & MOD_COBALT) && (!strcmp(leaf, "catalog.json") || !strcmp(leaf, "catalog.meta"))) return 1;
     if (!romfs_path_valid_relative(path)) {
         rt_log("mods: %s: %s is not a RomFS path; left out", m->name, path);
         return 1;
@@ -469,7 +475,7 @@ static int contest_order(const void *a, const void *b) {
 }
 
 static const char *owner_name(const Overlay *o) {
-    return o->mod ? mods_at(o->mod - 1)->name : o->prio ? "romfs_mods" : "the port's patches";
+    return o->mod ? mods_at(o->mod - 1)->name : o->prio == COBALT_PRIO ? "the Cobalt merge" : o->prio ? "romfs_mods" : "the port's patches";
 }
 
 // One overlay per path: the highest prio serves it; the others are dropped and counted on their mod.
@@ -505,8 +511,76 @@ static void mods_overlay_init(void) {
     int n = mods_count();
     for (int k = 0; k < n; k++) {
         const ModInfo *m = mods_at(k);
-        if (m->enabled && (m->kind & MOD_ROMFS) && m->problem == MOD_OK) mod_walk(k, 2 + (n - k), m->romfs, "");
+        if (!m->enabled || !(m->kind & MOD_ROMFS) || m->problem != MOD_OK) continue;
+        if (m->kind & MOD_COBALT) {   // the mod root mirrors the RomFS; only Data/ holds game files
+            char data[2100];
+            if (snprintf(data, sizeof data, "%s/Data", m->romfs) < (int)sizeof data && plat_dir_exists(data))
+                mod_walk(k, 2 + (n - k), data, "Data");
+        } else {
+            mod_walk(k, 2 + (n - k), m->romfs, "");
+        }
     }
+}
+
+// ---- the Cobalt merge (cobalt.c): reads files as the mods leave them, adds the merged files on top
+
+// The overlay that serves RomFS path p now (the highest prio), or NULL; before overlay_contest.
+static const Overlay *serving(const char *p) {
+    uint64_t i = index_any_case(p);
+    const Overlay *best = NULL;
+    for (size_t k = 0; k < noverlay; k++) {
+        const Overlay *o = &overlays[k];
+        if ((i != UINT64_MAX ? o->index == i : o->index == ADDED && !strcasecmp(o->name, p)) &&
+            (!best || o->prio > best->prio))
+            best = o;
+    }
+    return best;
+}
+
+uint8_t *romfs_base_read(const char *p, uint64_t *size) {
+    const Overlay *o = serving(p);
+    if (o) return plat_file_read(o->path, size);
+    uint64_t i = index_any_case(p);
+    if (i == UINT64_MAX) return NULL;
+    Entry e = entry(i);
+    uint8_t *b = malloc(e.size ? e.size : 1);
+    if (!b) return NULL;
+    for (uint64_t at = 0; at < e.size;) {
+        uint32_t n = e.size - at > READ_CHUNK ? READ_CHUNK : (uint32_t)(e.size - at);
+        if (image_map) memcpy(b + at, image_map + e.offset + at, n);
+        else if (read_at(image, b + at, n, e.offset + at) != n) {
+            free(b);
+            return NULL;
+        }
+        at += n;
+    }
+    *size = e.size;
+    return b;
+}
+
+int romfs_base_exists(const char *p) { return serving(p) || index_any_case(p) != UINT64_MAX; }
+
+void romfs_overlays_digest(Sha256 *h) {
+    for (size_t k = 0; k < noverlay; k++) {
+        const Overlay *o = &overlays[k];
+        char line[64];
+        sha256_update(h, o->name, strlen(o->name) + 1);
+        snprintf(line, sizeof line, "%llu %llu %d\n", (unsigned long long)o->id.size,
+                 (unsigned long long)o->id.write_time, o->prio);
+        sha256_update(h, line, strlen(line));
+    }
+}
+
+int romfs_cobalt_overlay(const char *p, const char *file) {
+    PlatFile *f = open_read(file);
+    if (!f) return 0;
+    Identity id = identity_of(f);
+    plat_file_close(f);
+    uint64_t i = index_any_case(p);
+    char *copy = strdup(file), *rp = strdup(i == UINT64_MAX ? p : entry_name(entry(i)));
+    need(copy && rp, "overlay path copy");
+    overlay_push((Overlay){i == UINT64_MAX ? ADDED : i, id.size, copy, rp, id, COBALT_PRIO, 0});
+    return 1;
 }
 
 static void mods_overlay_log(void) {
@@ -575,6 +649,7 @@ static void overlay_init(void) {
         for (size_t k = first; k < noverlay; k++) overlays[k].prio = i;
     }
     mods_overlay_init();
+    cobalt_bake();
     overlay_contest();
     mods_overlay_log();
     heapdef_overlay();

@@ -8,7 +8,9 @@
 #pragma once
 #include <stdint.h>
 
-enum { MOD_ROMFS = 1, MOD_EXEFS = 2, MOD_SUBSDK = 4, MOD_CHEATS = 8 };   // ModInfo.kind bits
+// ModInfo.kind bits. MOD_COBALT: a Cobalt mod (config.yaml / Data / patches at its root, which mirrors the RomFS;
+// cobalt.c merges its patches). MOD_NRO: a Cobalt code plugin (.nro) at its root, which cannot run here.
+enum { MOD_ROMFS = 1, MOD_EXEFS = 2, MOD_SUBSDK = 4, MOD_CHEATS = 8, MOD_COBALT = 16, MOD_NRO = 32 };
 typedef enum {
     MOD_OK,
     MOD_EMPTY,        // no RomFS file
