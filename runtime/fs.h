@@ -40,6 +40,13 @@ const char *romfs_image_path(void);                        // the romfs.bin path
 size_t romfs_overlay_count(void);
 int romfs_xbox_prompts_ready(void);                        // romfs-patches-xbox was there at start
 int romfs_xbox_prompts_active(void);                       // and was loaded (pad_layout = xbox_prompts at start)
+// The Cobalt merge (cobalt.c), during fs_init only: a RomFS file as the enabled mods leave it (malloc'd), whether one
+// is there, a digest of every overlay, and a merged file put on top of all of them.
+struct Sha256;
+uint8_t *romfs_base_read(const char *path, uint64_t *size);
+int romfs_base_exists(const char *path);
+void romfs_overlays_digest(struct Sha256 *h);
+int romfs_cobalt_overlay(const char *path, const char *file);
 const char *romfs_overlay(size_t k, const char **file, uint64_t *size, int *is_added);   // RomFS path of overlay k
 void fs_trace(const char *what, const char *path);         // TOTK_TRACE=fs: one line per open
 

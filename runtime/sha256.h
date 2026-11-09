@@ -3,7 +3,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
-typedef struct {
+typedef struct Sha256 {
     uint32_t h[8];
     uint64_t bytes;      // message bytes so far
     uint8_t buf[64];     // a partial block

@@ -15,7 +15,16 @@
 static volatile int32_t requested;
 
 void screenshot_request(void) { plat_xchg32(&requested, 1); }
-int screenshot_claim(void) { return plat_xchg32(&requested, 0) != 0; }
+// Called once per present. TOTK_SHOT_AT_FRAME=a,b,... (environment, for tests) also takes one at those frames.
+int screenshot_claim(void) {
+    static long frame;
+    static const char *at;
+    if (!frame) at = getenv("TOTK_SHOT_AT_FRAME");
+    frame++;
+    for (const char *p = at; p && *p; p = strchr(p, ',') ? strchr(p, ',') + 1 : NULL)
+        if (strtol(p, NULL, 10) == frame) return plat_xchg32(&requested, 0), 1;
+    return plat_xchg32(&requested, 0) != 0;
+}
 
 // ---- deflate: one fixed-Huffman block, LZ77 with a single-probe hash (fast, about 2x worse than zlib's default)
 typedef struct { uint8_t *p; size_t n; uint64_t bits; int nb; } Bits;

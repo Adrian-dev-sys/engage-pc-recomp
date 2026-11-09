@@ -5,7 +5,8 @@
 - **Mouse**: the mouse camera is off by default on Engage (`cfg.c` `ENGAGE` defaults: `MOUSE_SENS=0`), so clicks no
   longer capture the cursor.
 - **Screenshots**: F12 saves the presented frame, without the menu or overlay, as a PNG in `screenshots\` next to the
-  exe (`runtime/screenshot.c`; encoded on a worker thread).
+  exe (`runtime/screenshot.c`; encoded on a worker thread). For tests, `TOTK_SHOT_AT_FRAME=1500,3000` (environment)
+  also saves one at those presented frames.
 - **Fast-forward**: T, or L3+R3 on a gamepad, toggles it; F1 > Game > "Fast-forward speed" (2-4x, `fast_forward`).
   The guest clock (`main.c` `rt_speed_set`) and the per-frame game step (`frame_rate.c` `engage_frame`) are both
   multiplied, so Unity time and frame-counted logic stay together. Music plays at normal speed. On Engage, L3+R3 no
