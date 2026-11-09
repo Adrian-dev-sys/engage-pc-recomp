@@ -136,6 +136,15 @@ static void barrier(VkCommandBuffer cb, VkImage img, VkImageLayout from, VkPipel
     vkCmdPipelineBarrier2(cb, &d);
 }
 
+VkFormat vk_unorm_view_format(VkFormat f) {
+    switch (f) {
+    case VK_FORMAT_R8G8B8A8_SRGB: return VK_FORMAT_R8G8B8A8_UNORM;
+    case VK_FORMAT_B8G8R8A8_SRGB: return VK_FORMAT_B8G8R8A8_UNORM;
+    case VK_FORMAT_A8B8G8R8_SRGB_PACK32: return VK_FORMAT_A8B8G8R8_UNORM_PACK32;
+    default: return f;
+    }
+}
+
 VkImage vk_color_record(VkCommandBuffer cb, unsigned slot, VkImage src, VkFormat fmt, const int crop[4]) {
     if (!adjusting()) return VK_NULL_HANDLE;
     VkCtx *c = vk_ctx();
@@ -144,7 +153,7 @@ VkImage vk_color_record(VkCommandBuffer cb, unsigned slot, VkImage src, VkFormat
     slot %= SLOTS;
     if (C.src_view[slot]) vkDestroyImageView(c->device, C.src_view[slot], NULL);
     VkImageViewCreateInfo vi = {.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO, .image = src,
-                                .viewType = VK_IMAGE_VIEW_TYPE_2D, .format = fmt,
+                                .viewType = VK_IMAGE_VIEW_TYPE_2D, .format = vk_unorm_view_format(fmt),
                                 .subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1}};
     if (vkCreateImageView(c->device, &vi, NULL, &C.src_view[slot]) != VK_SUCCESS) {
         C.src_view[slot] = VK_NULL_HANDLE;

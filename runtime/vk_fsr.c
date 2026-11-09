@@ -167,7 +167,7 @@ int vk_fsr_record(VkCommandBuffer cb, unsigned slot, VkImage src, VkFormat fmt, 
     slot %= SLOTS;
     if (F.src_view[slot]) vkDestroyImageView(c->device, F.src_view[slot], NULL);
     VkImageViewCreateInfo vi = {.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO, .image = src,
-                                .viewType = VK_IMAGE_VIEW_TYPE_2D, .format = fmt,
+                                .viewType = VK_IMAGE_VIEW_TYPE_2D, .format = vk_unorm_view_format(fmt),   // sRGB: no decode (Engage)
                                 .components = {VK_COMPONENT_SWIZZLE_IDENTITY, VK_COMPONENT_SWIZZLE_IDENTITY,
                                                VK_COMPONENT_SWIZZLE_IDENTITY, VK_COMPONENT_SWIZZLE_ONE},
                                 .subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1}};

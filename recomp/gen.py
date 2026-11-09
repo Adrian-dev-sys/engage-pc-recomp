@@ -415,6 +415,8 @@ class Emitter:
                     repl.append(op(i, r.code))
                 elif r.kind == 'bl' and j == len(words) - 1:
                     repl.append(call(r.target, a))
+                elif r.kind == 'ret' and j == len(words) - 1:   # early return, lifted as a plain ret
+                    repl.append(f'{spill}' + ('if (c->x[30] != return_pc || c->sp != return_sp) rt_guest_resume(c, c->x[30]); ' if self.continuations else '') + 'return;')
                 else:
                     raise patches.PatchError(f'{a:#x}: replacement word {w:08x} is a {r.kind}')
             orig = op(i, ins.code) if ins.kind == 'op' else call(ins.target, a)
