@@ -145,6 +145,11 @@ static int script_log(Cpu *c) {
 #define NEW_BOOLEAN 0x2e200f0      // DynValue.NewBoolean(bool) static
 #define G(off) hook_main(off)
 
+static void trace(const char *what) {   // the first calls of each kind, so a test can be read from the log
+    static volatile int32_t n;
+    if (plat_inc32(&n) <= 40) rt_log("cobalt: lua: %s called", what);
+}
+
 // The i-th argument as UTF-8 ("" when it is not a string).
 static void arg_str(Cpu *c, uint64_t args, int i, char *out, size_t cap) {
     out[0] = 0;
@@ -175,6 +180,7 @@ static void arg_str(Cpu *c, uint64_t args, int i, char *out, size_t cap) {
 }
 
 static void act_notice(Cpu *c) {   // CobaltNotice(message)
+    trace("CobaltNotice");
     char text[512];
     arg_str(c, c->x[0], 0, text, sizeof text);
     rt_log("cobalt: lua: CobaltNotice: %s", text);
@@ -183,6 +189,7 @@ static void act_notice(Cpu *c) {   // CobaltNotice(message)
 }
 
 static void act_item_gain_silent(Cpu *c) {   // ItemGainSilent(pid | nil, iid)
+    trace("ItemGainSilent");
     uint64_t args = c->x[0], unit = guest_call(c, G(TRY_UNIT), args, 0, 0, 0);
     if (unit) {
         uint64_t iid = guest_call(c, G(TRY_STRING), args, 1, 0, 0);
@@ -195,12 +202,14 @@ static void act_item_gain_silent(Cpu *c) {   // ItemGainSilent(pid | nil, iid)
 }
 
 static void act_unit_set_level(Cpu *c) {   // UnitSetLevel(pid, level)
+    trace("UnitSetLevel");
     uint64_t args = c->x[0], unit = guest_call(c, G(TRY_UNIT), args, 0, 0, 0);
     uint64_t level = guest_call(c, G(TRY_INT), args, 1, 1, 0);
     if (unit) guest_call(c, G(UNIT_SET_LEVEL), unit, (uint32_t)level, 0, 0);
 }
 
 static void act_unit_learn_job_skill(Cpu *c) {   // UnitLearnJobSkill(pid)
+    trace("UnitLearnJobSkill");
     uint64_t unit = guest_call(c, G(TRY_UNIT), c->x[0], 0, 0, 0);
     if (unit) guest_call(c, G(UNIT_LEARN_SKILL), unit, 0, 0, 0);
 }
@@ -220,6 +229,7 @@ static uint64_t slot(Cpu *c, uint64_t off) {
 }
 
 static void act_unit_set_job(Cpu *c) {   // UnitSetJob(pid, jid[, weapon mask 1..0x3FF])
+    trace("UnitSetJob");
     uint64_t args = c->x[0], unit = guest_call(c, G(TRY_UNIT), args, 0, 0, 0);
     uint64_t jid = guest_call(c, G(TRY_STRING), args, 1, 0, 0);
     uint64_t get = slot(c, SLOT_JOBDATA_GET), job = jid && get ? guest_call(c, ld64(get), jid, get, 0, 0) : 0;
@@ -241,6 +251,7 @@ static void act_unit_set_job(Cpu *c) {   // UnitSetJob(pid, jid[, weapon mask 1.
 }
 
 static void act_item_gift(Cpu *c) {   // ItemGift(reward id, message id)
+    trace("ItemGift");
     uint64_t args = c->x[0], seq = guest_call(c, G(GET_SEQUENCE), 0, 0, 0, 0);
     uint64_t reward = guest_call(c, G(TRY_STRING), args, 0, 0, 0), mess = guest_call(c, G(TRY_STRING), args, 1, 0, 0);
     if (seq && reward) guest_call(c, G(GIFT_GET), seq, reward, mess, 0);
@@ -248,6 +259,7 @@ static void act_item_gift(Cpu *c) {   // ItemGift(reward id, message id)
 }
 
 static void shop(Cpu *c, uint64_t create) {
+    trace("Menu*ShopShow");
     uint64_t seq = guest_call(c, G(GET_SEQUENCE), 0, 0, 0, 0);
     if (seq) guest_call(c, G(create), seq, 0, 0, 0);
     guest_call(c, G(YIELD), 0, 0, 0, 0);
@@ -257,12 +269,14 @@ static void act_weapon_shop(Cpu *c) { shop(c, WEAPON_SHOP); }
 static void act_refine_shop(Cpu *c) { shop(c, REFINE_SHOP); }
 
 static void act_add_bond_ring(Cpu *c) {   // AddBondRing(rnid[, count])
+    trace("AddBondRing");
     uint64_t args = c->x[0], rnid = guest_call(c, G(TRY_STRING), args, 0, 0, 0);
     int64_t n = (int32_t)guest_call(c, G(TRY_INT), args, 1, 1, 0);
     if (rnid) guest_call(c, G(RING_ADD), rnid, 0, (uint64_t)(n < 1 ? 1 : n), 0);
 }
 
 static void fn_has_season_pass(Cpu *c) {   // HasPurchasedSeasonPass() -> bool: a Lua function, not an action
+    trace("HasPurchasedSeasonPass");
     uint64_t has = guest_call(c, G(HAS_CONTENT), 0, 0, 0, 0) & 1;
     c->x[0] = guest_call(c, G(NEW_BOOLEAN), has, 0, 0, 0);
 }
@@ -289,12 +303,20 @@ __attribute__((constructor)) static void actions_register(void) {
 
 static uint64_t g_template, g_ftemplate;   // a game action / function delegate, seen at their registration
 
+// Only a static method with one parameter (DynValue[] args) and no target will do: a lambda with a closure target gets
+// the target first and the arguments one register later (Il2CppDelegate: target +0x20, method +0x28; MethodInfo:
+// flags +0x44, parameters_count +0x4a).
+static int plain_static(uint64_t d) {
+    if (!d || ld64(d + 0x20)) return 0;
+    uint64_t m = ld64(d + 0x28);
+    return m && (*(const uint16_t *)(uintptr_t)(m + 0x44) & 0x10) && *(const uint8_t *)(uintptr_t)(m + 0x4a) == 1;
+}
 static int regist_action(Cpu *c) {
-    if (!g_template && c->x[1]) g_template = c->x[1];
+    if (!g_template && plain_static(c->x[1])) g_template = c->x[1];
     return 0;
 }
 static int regist_function(Cpu *c) {
-    if (!g_ftemplate && c->x[1]) g_ftemplate = c->x[1];
+    if (!g_ftemplate && plain_static(c->x[1])) g_ftemplate = c->x[1];
     return 0;
 }
 
@@ -326,7 +348,11 @@ static int load_impl(Cpu *c) {
         if (delegates[i] && name)
             guest_call(c, G(actions[i].function ? REGIST_FUNCTION : REGIST_ACTION), self, delegates[i], name, 0);
     }
-    if (!g_template) rt_log("cobalt: lua: no game action seen; Cobalt's Lua functions are missing");
+    static int logged;
+    if (!logged++)
+        rt_log("cobalt: lua: %zu functions registered (action template %s, function template %s)", NACTIONS,
+               g_template ? (const char *)(uintptr_t)ld64(ld64(g_template + 0x28) + 0x10) : "none",
+               g_ftemplate ? (const char *)(uintptr_t)ld64(ld64(g_ftemplate + 0x28) + 0x10) : "none");
     return 1;
 }
 
