@@ -370,6 +370,10 @@ void res_wanted(unsigned out[2]) {
 
 void res_sizes(unsigned out[2], unsigned scene[2]) {
     decide();
+    if (RT_ENGAGE) {   // Engage renders its whole frame at one size (engres): output and scene are that size
+        out[0] = scene[0] = eng_w, out[1] = scene[1] = eng_h;
+        return;
+    }
     out[0] = R.on ? R.ow : BASE_W, out[1] = R.on ? R.oh : BASE_H;
     scene[0] = R.on ? R.sw : SCENE_W, scene[1] = R.on ? R.sh : SCENE_H;
 }

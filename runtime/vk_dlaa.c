@@ -594,8 +594,29 @@ static int scene_color(VkFormat f) {
     return f == VK_FORMAT_B10G11R11_UFLOAT_PACK32 || f == VK_FORMAT_R16G16B16A16_SFLOAT;
 }
 
+// Survey (logged when DLAA found no scene for a while): the frame's passes of at least a quarter of the render width,
+// to see what a scene Engage draws differently looks like.
+static struct { uint32_t w, h, n; int fmt, zfmt, nc; } sv[24];
+static int nsv;
+
+static void survey_note(const VkExec *ex) {
+    unsigned rw, rh;
+    res_engage_render_size(&rw, &rh);
+    if (ex->pass_w * 4 < rw) return;
+    const VkExecTarget *c = &ex->color[0], *z = &ex->depth;
+    int fmt = c->image ? (int)c->format : 0, zf = z->image ? (int)z->format : 0;
+    for (int i = 0; i < nsv; i++)
+        if (sv[i].w == ex->pass_w && sv[i].h == ex->pass_h && sv[i].fmt == fmt && sv[i].zfmt == zf &&
+            sv[i].nc == (int)ex->pass_ncolor) {
+            sv[i].n++;
+            return;
+        }
+    if (nsv < 24) sv[nsv++] = (typeof(sv[0])){ex->pass_w, ex->pass_h, 1, fmt, zf, (int)ex->pass_ncolor};
+}
+
 void vk_dlaa_pass(VkExec *ex) {
     const VkExecTarget *c = &ex->color[0], *z = &ex->depth;
+    if (dl_active() && !D.done) survey_note(ex);
     if (!dl_active() || D.done) return;
     unsigned rw, rh;
     res_engage_render_size(&rw, &rh);
@@ -674,7 +695,23 @@ void vk_dlaa_frame(void) {
         return;
     }
     if (!dl_active()) return;
-    if (!D.done) D.frames_missed++;
+    static uint64_t miss_run, logged;
+    if (D.done) miss_run = 0;
+    if (!D.done) {
+        D.frames_missed++;
+        if (++miss_run == 300 && logged < 6) {   // 300 frames in a row without the DLAA point: what the frame drew
+            logged++;
+            unsigned rw, rh;
+            res_engage_render_size(&rw, &rh);
+            rt_log("dlaa survey: no scene for 300 frames (render size %ux%u); this frame's passes >= 1/4 width "
+                   "(w x h, colour targets, VkFormat of target 0, depth VkFormat, count):", rw, rh);
+            for (int i = 0; i < nsv; i++)
+                rt_log("dlaa survey:   %ux%u, %d targets, fmt %d, depth %d, x%u", sv[i].w, sv[i].h, sv[i].nc, sv[i].fmt,
+                       sv[i].zfmt, sv[i].n);
+        }
+        if (miss_run > 300) miss_run = 0;
+    }
+    nsv = 0;
     if (D.jit_used && !D.done) D.hold = 60, D.holds++;   // jittered but not resolved: that frame shook
     else if (D.hold) D.hold--;
     if (!D.done) D.jit_ok = 0;
