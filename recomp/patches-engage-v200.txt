@@ -253,3 +253,4 @@ hook cobalt_script_log main 1ed8190          # App.ScriptSystem::Log(1): empty i
 hook cobalt_regist_action main 24e2430        # App.EventScript::RegistAction(2): a game action's delegate as template
 hook cobalt_eventscript_load main 24e2620     # App.EventScript::LoadImpl(1): Cobalt's Lua functions after the game's
 hook cobalt_regist_function main 24e23e0    # App.EventScript::RegistFunction(2): a game function delegate as template
+hook cobalt_reliance_exp main 200f810         # App.RelianceData::TryGetExp(1): Cobalt's Support.xml (runtime/cobalt_support.c)
