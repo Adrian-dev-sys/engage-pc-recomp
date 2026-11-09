@@ -252,6 +252,7 @@ int res_heapdef_build(const void *in, size_t n, void **out, size_t *out_n);   //
                                                            // the grown heaps, malloc'd; 0 = cannot (logged)
 void res_heapdef_served(void);                             // romfs.c serves the grown table
 void res_engage_render_size(unsigned *w, unsigned *h);   // Engage's scene size (engres), 1920x1080 when off
+uint64_t res_engage_pool_extra_bytes(void);              // Engage: application pool headroom for the render size and mods
 float res_engage_scene_scale(void);                         // TOTK_UPSCALE_MODE: the 3D scene's share of the render size
 float res_rt_scale(unsigned w, unsigned h);              // >1: a render target of this guest size is made that much larger
 void res_rt_seen(unsigned w, unsigned h, int fmt);       // Engage: logs a new render target size once
