@@ -247,6 +247,13 @@ static struct {
 
 static int dl_active(void) { return N.available && !D.failed && D.on; }
 
+// Where the DLAA code is, for the watchdog: 0 outside it.
+enum { PH_NONE, PH_FREE, PH_MV, PH_DRAIN, PH_CREATE, PH_EVAL };
+static volatile int dl_phase;
+static const char *const phase_name[] = {"outside DLAA", "freeing DLSS images (device wait)", "motion-vector pass",
+                                         "waiting for the command recorder", "creating the DLSS feature",
+                                         "in NGX's DLSS evaluation"};
+
 static void dl_fail(const char *what, NgxResult r) {
     rt_log("dlaa: %s failed (%08x): DLAA off for this run", what, (unsigned)r);
     D.failed = 1;
@@ -269,7 +276,12 @@ static int image2d(uint32_t w, uint32_t h, VkFormat f, VkImageUsageFlags usage, 
 
 static void free_size(struct Size *e) {
     const VkCtx *c = vk_ctx();
+    int ph = dl_phase;
+    dl_phase = PH_FREE;
+    vk_queue_lock();   // vkDeviceWaitIdle needs every queue externally synchronized: the present thread submits too
     vkDeviceWaitIdle(c->device);
+    vk_queue_unlock();
+    dl_phase = ph;
     if (e->out_view) vkDestroyImageView(c->device, e->out_view, NULL);
     if (e->mv_view) vkDestroyImageView(c->device, e->mv_view, NULL);
     if (e->out) vmaDestroyImage(c->vma, e->out, e->out_mem);
@@ -489,7 +501,10 @@ static void evaluate(VkExec *ex) {
     float jx = D.jit_used ? D.ux : 0.0f, jy = D.jit_used ? D.uy : 0.0f;
     static int no_mv = -1;
     if (no_mv < 0) no_mv = !rt_knob("DLAA_MV", "1");   // TOTK_DLAA_MV=0: zero motion (test)
-    if (no_mv || !mv_pass(ex, e, zv, jx, jy)) {
+    dl_phase = PH_MV;
+    int mv_ok = !no_mv && mv_pass(ex, e, zv, jx, jy);
+    dl_phase = PH_NONE;
+    if (!mv_ok) {
         VkClearColorValue zero = {{0, 0, 0, 0}};
         VkImageSubresourceRange all = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
         vkCmdClearColorImage(cb, e->mv, VK_IMAGE_LAYOUT_GENERAL, &zero, 1, &all);
@@ -498,7 +513,9 @@ static void evaluate(VkExec *ex) {
     }
     VkImageView cv = vk_exec_target_view(t->img, t->format, VK_IMAGE_VIEW_TYPE_2D, VK_IMAGE_ASPECT_COLOR_BIT, t->level,
                                          t->base_layer, 1, 0);
+    dl_phase = PH_DRAIN;
     rec_drain();   // NGX records into the command buffer itself: the recorder thread must have made every call so far
+    dl_phase = PH_NONE;
     if (!e->feat) {
         int pk = D.preset ? D.preset : 11;   // K (transformer), NVIDIA's model for DLAA
         p_setu(p, "CreationNodeMask", 1);
@@ -513,7 +530,9 @@ static void evaluate(VkExec *ex) {
         p_seti(p, "DLSS.Enable.Output.Subrects", 0);
         p_setu(p, "DLSS.Hint.Render.Preset.DLAA", (unsigned)pk);
         p_setu(p, "DLSS.Hint.Render.Preset.Quality", (unsigned)pk);
+        dl_phase = PH_CREATE;
         NgxResult r = N.create(cb, NGX_FEATURE_SUPERSAMPLING, p, &e->feat);
+        dl_phase = PH_NONE;
         if (!NGX_OK(r) || !e->feat) return dl_fail("DLSS feature creation", r);
         D.reset = 1;
         rt_log("dlaa: DLSS feature created at %ux%u, preset %c (scene format %d, depth format %d)", w, h, 'A' + pk - 1,
@@ -543,7 +562,9 @@ static void evaluate(VkExec *ex) {
     double dt = D.last_eval_ns ? (now - D.last_eval_ns) / 1e6 : 0;
     D.last_eval_ns = now;
     p_setf(p, "FrameTimeDeltaInMsec", dt > 0 && dt < 100 ? (float)dt : 16.67f);
+    dl_phase = PH_EVAL;
     NgxResult r = N.evaluate(cb, e->feat, p, NULL);
+    dl_phase = PH_NONE;
     if (!NGX_OK(r)) return dl_fail("DLSS evaluation", r);
     D.reset = 0;
     D.last = e, e->used = D.evals + 1;
@@ -599,7 +620,50 @@ static void preset_check(void) {
     D.preset = p, D.preset_dirty = 1, D.reset = 1;
 }
 
+// ---------------------------------------------------------------- watchdog and status
+// A frame not presented for 5 s logs once (and again at 30 s) where the DLAA code is, to tell a hang in it from one
+// elsewhere; the log is written straight to the file, so it survives a hang. Runs whether DLAA is on or not.
+static volatile uint64_t last_present_ns;
+static volatile uint64_t evals_at_present, evals_prev_second, status_ns;
+
+static void watchdog_main(void *arg) {
+    (void)arg;
+    int logged = 0;
+    for (;;) {
+        plat_sleep_ms(1000);
+        uint64_t last = last_present_ns, now = plat_now_ns();
+        double s = last ? (now - last) / 1e9 : 0;
+        if (s < 5) {
+            logged = 0;
+            continue;
+        }
+        if ((logged == 0 && s >= 5) || (logged == 1 && s >= 30)) {
+            logged++;
+            rt_log("watchdog: no frame presented for %.0f s; DLAA %s, %s (%llu frames anti-aliased)", s,
+                   D.on ? "on" : "off", phase_name[dl_phase], (unsigned long long)D.evals);
+        }
+    }
+}
+
+// The F10 overlay's anti-aliasing line (ui/menu.cpp).
+const char *vk_dlaa_status(void) {
+    static char buf[96];
+    if (!vk_dlaa_wanted()) return cfg_bool("TOTK_DLAA") ? "DLAA after a restart" : "off";
+    if (!N.available) return "DLAA unavailable (see log)";
+    if (D.failed) return "DLAA failed (see log)";
+    if (!D.on) return "off";
+    uint64_t now = plat_now_ns();
+    if (now - status_ns > 1000000000ull) status_ns = now, evals_prev_second = evals_at_present, evals_at_present = D.evals;
+    if (D.evals == evals_prev_second) return "DLAA on, no 3D scene";
+    snprintf(buf, sizeof buf, "DLAA (DLSS model %c), %ux%u", D.preset ? 'A' + D.preset - 1 : 'K', D.color.width,
+             D.color.height);
+    return buf;
+}
+
 void vk_dlaa_frame(void) {
+    static int wd;
+    last_present_ns = plat_now_ns();
+    if (!wd) wd = 1, plat_thread_spawn(watchdog_main, NULL, "watchdog", 0);
     preset_check();
     int on = N.available && cfg_bool("TOTK_DLAA");
     if (on != D.on) {

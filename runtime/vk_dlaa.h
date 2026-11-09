@@ -14,7 +14,8 @@ int vk_dlaa_available(void);
 // scene's light target or, at the first half-width pass after it (the bloom), runs DLAA on that target.
 typedef struct VkExec VkExec;
 void vk_dlaa_pass(VkExec *ex);
-void vk_dlaa_frame(void);   // each present
+void vk_dlaa_frame(void);   // each present (also feeds the watchdog)
+const char *vk_dlaa_status(void);   // the F10 overlay's anti-aliasing line
 // vk_exec_draw.c, each draw before its fixed state is recorded: notes the scene camera block (vk_dlaa_draw), and moves
 // the viewport of the scene's draws by the frame's jitter (vk_dlaa_viewport).
 void vk_dlaa_draw(VkExec *ex);
