@@ -143,6 +143,12 @@ static int script_log(Cpu *c) {
 #define HAS_CONTENT 0x29f4270      // DLCManager.HasContent(Content) static; Content.E0 = 0, the expansion pass
 #define RING_ADD 0x1c5d420         // UnitRingPool.Add(rnid, Unit, count) static
 #define NEW_BOOLEAN 0x2e200f0      // DynValue.NewBoolean(bool) static
+#define MAPIMAGE_METHOD 0x617b4e8   // metadata slot of SingletonClass<MapImage>.get_Instance's MethodInfo
+#define MAP_SET_SIZE 0x1de2ba0      // MapImage.SetSize(w, h)
+#define MAP_SET_X 0x1de3960         // MapImage.set_PlayAreaX / Z / X1 / Z1
+#define MAP_SET_Z 0x1de3980
+#define MAP_SET_X1 0x1de3a60
+#define MAP_SET_Z1 0x1de3a80
 #define G(off) hook_main(off)
 
 static void trace(const char *what) {   // the first calls of each kind, so a test can be read from the log
@@ -275,6 +281,28 @@ static void act_add_bond_ring(Cpu *c) {   // AddBondRing(rnid[, count])
     if (rnid) guest_call(c, G(RING_ADD), rnid, 0, (uint64_t)(n < 1 ? 1 : n), 0);
 }
 
+static uint64_t map_image(Cpu *c) {
+    guest_call(c, G(INIT_METADATA), G(MAPIMAGE_METHOD), 0, 0, 0);
+    uint64_t m = ld64(G(MAPIMAGE_METHOD));
+    return m ? guest_call(c, G(SINGLETON_GET), m, 0, 0, 0) : 0;
+}
+
+static void act_map_set_size(Cpu *c) {   // MapSetSize(w, h)
+    trace("MapSetSize");
+    uint64_t args = c->x[0], mi = map_image(c);
+    uint64_t w = (uint32_t)guest_call(c, G(TRY_INT), args, 0, 0, 0), h = (uint32_t)guest_call(c, G(TRY_INT), args, 1, 0, 0);
+    if (mi) guest_call(c, G(MAP_SET_SIZE), mi, w, h, 0);
+}
+
+static void act_map_set_coords(Cpu *c) {   // MapSetCoords(x, z): the play area's corner
+    trace("MapSetCoords");
+    uint64_t args = c->x[0], mi = map_image(c);
+    uint64_t x = (uint32_t)guest_call(c, G(TRY_INT), args, 0, 0, 0), z = (uint32_t)guest_call(c, G(TRY_INT), args, 1, 0, 0);
+    if (!mi) return;
+    guest_call(c, G(MAP_SET_X), mi, x, 0, 0), guest_call(c, G(MAP_SET_Z), mi, z, 0, 0);
+    guest_call(c, G(MAP_SET_X1), mi, x, 0, 0), guest_call(c, G(MAP_SET_Z1), mi, z, 0, 0);
+}
+
 static void fn_has_season_pass(Cpu *c) {   // HasPurchasedSeasonPass() -> bool: a Lua function, not an action
     trace("HasPurchasedSeasonPass");
     uint64_t has = guest_call(c, G(HAS_CONTENT), 0, 0, 0, 0) & 1;
@@ -293,6 +321,8 @@ static const Action actions[] = {
     {"MenuWeaponShopShow", act_weapon_shop, 0},
     {"MenuRefineShopShow", act_refine_shop, 0},
     {"AddBondRing", act_add_bond_ring, 0},
+    {"MapSetSize", act_map_set_size, 0},
+    {"MapSetCoords", act_map_set_coords, 0},
     {"HasPurchasedSeasonPass", fn_has_season_pass, 1},
 };
 #define NACTIONS (sizeof actions / sizeof *actions)
