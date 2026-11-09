@@ -59,7 +59,7 @@ take no time; the first one lists the game's bundle CAB names once (`profile\cob
   `Voice="Mod!Fallback"` falls back, and `CobaltEvent:<event>_Original` markers play the game's own line.
 - Root-level `<Name>.lua` scripts run when a map opens in the Somniel, with Cobalt's Lua functions (`CobaltNotice`,
   `ItemGainSilent`, `UnitSetJob`, `UnitSetLevel`, `UnitLearnJobSkill`, `ItemGift`, `MenuItemShopShow`,
-  `MenuWeaponShopShow`, `MenuRefineShopShow`, `AddBondRing`, `HasPurchasedSeasonPass`). The game's Lua `Log()` writes
+  `MenuWeaponShopShow`, `MenuRefineShopShow`, `AddBondRing`, `MapSetSize`, `MapSetCoords`, `HasPurchasedSeasonPass`). The game's Lua `Log()` writes
   to the log (`runtime/cobalt_lua.c`).
 - `patches\xml\Support.xml`: additional supports per character group, with the experience curve `ExpType`
   (`runtime/cobalt_support.c`). The characters must also be in `Reliance.xml`.
@@ -72,8 +72,15 @@ take no time; the first one lists the game's bundle CAB names once (`profile\cob
   file of the wrong size is skipped and logged. Every palette also gets a `<Palette>_<Palette>` unit icon, so a mod's
   new character has one.
 
-Not supported yet: Cobalt's own extras (its settings menu, Phoenix mode, smithy shortcut, rumble), `MapSetSize` /
-`MapSetCoords`.
+- Engage zones: an emblem whose `Nickname` is `X_Y_<Ascii>` uses the engage zone of the emblem with that ascii name.
+- Cobalt's settings (`runtime/cobalt_extras.c`) are in F1 > Mods > Cobalt instead of its in-game page, saved in
+  `engage.ini` `[mods]`: combat damage numbers (`cobalt_combat_popups`), combat interface (`cobalt_combat_ui`), ring
+  polish rumble (`cobalt_ring_rumble`), outfits in supports (`cobalt_support_outfit`: scenes that ask for a
+  character's default outfit get the worn one) and the loaded save's game mode (Casual, Classic, Phoenix; saved with
+  the game). A Phoenix save is labelled in the save list.
+
+Not supported: Cobalt's combat rumble (its tuned event table has no licence to reuse), the Smithy and Skill
+Inheritance shortcuts in the sortie menu, overclock, and its render scale and LOD settings (Screen has ours).
 Not possible: `.nro` code plugins and `.ips` code patches (logged; the mod's data still loads). They change ARM64
 code, which the recompiled game does not have at run time.
 
