@@ -213,7 +213,7 @@ float res_rt_scale(unsigned w, unsigned h) {
 
 static void rt_scale_init(unsigned render_h) {
     const char *s = cfg_get("TOTK_RT_SCALE_SIZES");
-    if (!s || !*s) s = "640x1080";
+    if (!s || !*s) s = "640x1080,480x480";   // unit info model, talk window face (2x MSAA, resolved)
     rt_nsizes = 0;
     for (const char *p = s; *p && rt_nsizes < 8;) {
         unsigned w, h;

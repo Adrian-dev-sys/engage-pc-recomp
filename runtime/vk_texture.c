@@ -325,8 +325,10 @@ static Tex *create_tex(const tex_t *t, const TexKey *k, int defer_init) {
     uint32_t samples = d->samples > 1 ? (uint32_t)d->samples : 1;
     if (samples > 1) levels = 1;
     // Asset-sized render targets (resolution.c res_rt_scale): a larger host image, drawn with scaled viewports
-    float scale = type == VK_IMAGE_TYPE_2D && layers == 1 && levels == 1 && samples == 1 &&
-                  d->target == NVN_TEXTURE_TARGET_2D ? res_rt_scale(w, h) : 1.0f;
+    // multisampled ones too: their resolve into the single-sampled target needs both the same size
+    float scale = type == VK_IMAGE_TYPE_2D && layers == 1 && levels == 1 &&
+                  (d->target == NVN_TEXTURE_TARGET_2D || d->target == NVN_TEXTURE_TARGET_2D_MULTISAMPLE)
+                      ? res_rt_scale(w, h) : 1.0f;
     if (type == VK_IMAGE_TYPE_2D && (d->flags & NVN_TEXTURE_FLAGS_COMPRESSIBLE) && !(f.depth || f.stencil)) res_rt_seen(w, h, d->format);
     if (scale != 1.0f) w = (uint32_t)(w * scale + 0.5f), h = (uint32_t)(h * scale + 0.5f);
     VkFormatFeatureFlags ff = features_of(f.vk);
