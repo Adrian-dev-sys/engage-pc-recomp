@@ -658,6 +658,11 @@ static void tab_screen(float scale) {
         opt_toggle("TOTK_FULL_RES", UI_MENU_FULL_RES, UI_MENU_FULL_RES_DESC);
         opt_toggle("TOTK_ENGAGE_LOD", UI_MENU_LOD, UI_MENU_LOD_DESC);
         opt_toggle("TOTK_DLAA", UI_MENU_DLAA, UI_MENU_DLAA_DESC);
+        static const UiTextId modes[] = {UI_MENU_UPSCALE_NATIVE, UI_MENU_UPSCALE_QUALITY, UI_MENU_UPSCALE_BALANCED,
+                                         UI_MENU_UPSCALE_PERFORMANCE, UI_MENU_UPSCALE_ULTRA};
+        opt_choice("TOTK_UPSCALE_MODE", UI_MENU_UPSCALE_MODE, modes, 5, UI_MENU_UPSCALE_MODE_DESC);
+        static const UiTextId ups[] = {UI_MENU_AA_UPSCALER_AUTO, UI_MENU_AA_UPSCALER_DLSS, UI_MENU_AA_UPSCALER_FSR3};
+        opt_choice("TOTK_AA_UPSCALER", UI_MENU_AA_UPSCALER, ups, 3, UI_MENU_AA_UPSCALER_DESC);
         static const UiTextId preset[] = {UI_MENU_DLSS_PRESET_DEFAULT, UI_MENU_DLSS_PRESET_K, UI_MENU_DLSS_PRESET_J,
                                           UI_MENU_DLSS_PRESET_E};
         opt_choice("TOTK_DLSS_PRESET", UI_MENU_DLSS_PRESET, preset, 4, UI_MENU_DLSS_PRESET_DESC);

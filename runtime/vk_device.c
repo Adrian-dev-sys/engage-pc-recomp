@@ -211,10 +211,16 @@ static int create_device(void) {
     vkEnumerateDeviceExtensionProperties(g_vk.phys, NULL, &ne, NULL);
     VkExtensionProperties *ep = calloc(ne ? ne : 1, sizeof *ep);
     vkEnumerateDeviceExtensionProperties(g_vk.phys, NULL, &ne, ep);
-    const char *ext[56];
+    const char *ext[64];
     uint32_t n_ext = 0;
     for (size_t i = 0; i < sizeof k_required_ext / sizeof *k_required_ext; i++) ext[n_ext++] = k_required_ext[i];
     vk_dlaa_device_exts(ep, ne, ext, &n_ext, 40);   // NGX's; the slots after 40 stay for the optional ones below
+    // FSR 3.1 (vk_ffx.cpp): its Vulkan back end looks vkGetBufferMemoryRequirements2KHR up by that name, which resolves
+    // only with the extension enabled (the core function has no suffix); without it the back end calls address 0
+    int have_mr2 = 0;
+    for (uint32_t i = 0; i < n_ext; i++) have_mr2 |= !strcmp(ext[i], VK_KHR_GET_MEMORY_REQUIREMENTS_2_EXTENSION_NAME);
+    if (!have_mr2 && has_ext(ep, ne, VK_KHR_GET_MEMORY_REQUIREMENTS_2_EXTENSION_NAME))
+        ext[n_ext++] = VK_KHR_GET_MEMORY_REQUIREMENTS_2_EXTENSION_NAME;
 
     FeatureChain *c = calloc(1, sizeof *c);
     void **tail = &c->f2.pNext;

@@ -20,6 +20,7 @@
 #include "vk.h"
 #include "vk_dlaa.h"
 #include "vk_exec.h"
+#include "vk_ffx.h"
 #include "vk_rec.h"
 #include "dlaa_mv_spv.h"
 
@@ -169,8 +170,11 @@ static int vtable_ok(void) {
     return ok;
 }
 
-void vk_dlaa_init(void) {
-    if (!vk_dlaa_wanted() || !core_load()) return;
+// FSR 3.1 (vk_ffx.cpp) in DLSS's place: TOTK_AA_UPSCALER = fsr3, or auto where DLSS is not available.
+static int use_fsr;
+
+static void ngx_init(void) {
+    if (!core_load()) return;
     wchar_t wdir[PLAT_PATH_MAX];
     if (!plat_exe_dir_wide(wdir, PLAT_PATH_MAX)) {
         rt_log("dlaa: cannot name the executable's folder for NGX: DLAA off");
@@ -196,7 +200,16 @@ void vk_dlaa_init(void) {
            driver ? "; the driver needs an update" : "");
 }
 
-int vk_dlaa_available(void) { return vk_dlaa_wanted() && N.available; }
+void vk_dlaa_init(void) {
+    if (!vk_dlaa_wanted()) return;
+    const char *b = cfg_value("TOTK_AA_UPSCALER");
+    if (strcmp(b, "fsr3")) ngx_init();
+    if (!N.available && strcmp(b, "dlss")) use_fsr = vk_ffx_load();
+    rt_log("dlaa: temporal anti-aliasing with %s", N.available ? "DLSS" : use_fsr ? "FSR 3.1" : "nothing (unavailable)");
+}
+
+static int backend_ok(void) { return N.available || use_fsr; }
+int vk_dlaa_available(void) { return vk_dlaa_wanted() && backend_ok(); }
 
 // ---------------------------------------------------------------- where DLAA runs in Engage's frame
 // Measured (TOTK_DUMP at the title menu): Unity's forward renderer draws the scene (opaque, sky, transparents) into one
@@ -246,7 +259,8 @@ static struct {
 #define CAM_BYTES 64u
 #define CAM_SLOT 256u
 
-static int dl_active(void) { return N.available && !D.failed && D.on; }
+static int backend_ok(void);
+static int dl_active(void) { return backend_ok() && !D.failed && D.on; }
 
 // Where the DLAA code is, for the watchdog: 0 outside it.
 enum { PH_NONE, PH_FREE, PH_MV, PH_DRAIN, PH_CREATE, PH_EVAL };
@@ -509,7 +523,7 @@ static void evaluate(VkExec *ex, int up) {
     struct Size *e = size_for(cb, w, h, ow, oh);
     if (!e) return dl_fail("work image creation", 0);
     if (e != D.last) D.reset = 1;
-    if (!D.params && !NGX_OK(N.alloc_params(&D.params))) return dl_fail("parameter allocation", 0);
+    if (!use_fsr && !D.params && !NGX_OK(N.alloc_params(&D.params))) return dl_fail("parameter allocation", 0);
     NgxParam *p = D.params;
     VkImageView zv = vk_exec_target_view(z->img, z->format, VK_IMAGE_VIEW_TYPE_2D, VK_IMAGE_ASPECT_DEPTH_BIT, z->level,
                                          z->base_layer, 1, 0);
@@ -531,6 +545,19 @@ static void evaluate(VkExec *ex, int up) {
     dl_phase = PH_DRAIN;
     rec_drain();   // NGX records into the command buffer itself: the recorder thread must have made every call so far
     dl_phase = PH_NONE;
+    if (use_fsr) {
+        if (D.last_color != t->image) D.reset = 1, D.last_color = t->image;
+        uint64_t now = plat_now_ns();
+        double dt = D.last_eval_ns ? (now - D.last_eval_ns) / 1e6 : 0;
+        D.last_eval_ns = now;
+        VkFfxImage fc = {t->image, t->format, w, h, 0}, fz = {z->image, z->format, w, h, 0},
+                   fm = {e->mv, VK_FORMAT_R16G16_SFLOAT, w, h, 1}, fo = {e->out, VK_FORMAT_R16G16B16A16_SFLOAT, ow, oh, 1};
+        dl_phase = PH_EVAL;
+        int ok = vk_ffx_upscale(cb, &fc, &fz, &fm, &fo, jx, jy, D.reset, dt > 0 && dt < 100 ? (float)dt : 16.67f, 0);
+        dl_phase = PH_NONE;
+        if (!ok) return dl_fail("FSR 3.1 upscaling", 0);
+        goto dispatched;
+    }
     if (!e->feat) {
         // the model per mode (1 A ... 11 K, 12 L, 13 M), as NVIDIA recommends for DLSS 4.5 (310.x): K for DLAA, Quality
         // and Balanced, M for Performance, L for Ultra Performance; dlss_preset takes one model for every mode
@@ -588,6 +615,7 @@ static void evaluate(VkExec *ex, int up) {
     NgxResult r = N.evaluate(cb, e->feat, p, NULL);
     dl_phase = PH_NONE;
     if (!NGX_OK(r)) return dl_fail("DLSS evaluation", r);
+dispatched:
     D.reset = 0;
     D.last = e, e->used = D.evals + 1;
     full_barrier(cb);
@@ -750,14 +778,17 @@ static void watchdog_main(void *arg) {
 const char *vk_dlaa_status(void) {
     static char buf[96];
     if (!vk_dlaa_wanted()) return cfg_bool("TOTK_DLAA") ? "DLAA after a restart" : "off";
-    if (!N.available) return "DLAA unavailable (see log)";
-    if (D.failed) return "DLAA failed (see log)";
+    if (!backend_ok()) return "DLSS / FSR unavailable (see log)";
+    if (D.failed) return "DLSS / FSR failed (see log)";
     if (!D.on) return "off";
     uint64_t now = plat_now_ns();
     if (now - status_ns > 1000000000ull) status_ns = now, evals_prev_second = evals_at_present, evals_at_present = D.evals;
     if (D.evals == evals_prev_second) return "DLAA on, no 3D scene";
     if (D.last && D.last->ow > D.last->w)
-        snprintf(buf, sizeof buf, "DLSS %ux%u -> %ux%u", D.last->w, D.last->h, D.last->ow, D.last->oh);
+        snprintf(buf, sizeof buf, "%s %ux%u -> %ux%u", use_fsr ? "FSR 3.1" : "DLSS", D.last->w, D.last->h, D.last->ow,
+                 D.last->oh);
+    else if (use_fsr)
+        snprintf(buf, sizeof buf, "FSR 3.1 native AA, %ux%u", D.color.width, D.color.height);
     else
         snprintf(buf, sizeof buf, "DLAA (DLSS model %c), %ux%u", D.preset ? 'A' + D.preset - 1 : 'K', D.color.width,
                  D.color.height);
@@ -769,7 +800,7 @@ void vk_dlaa_frame(void) {
     last_present_ns = plat_now_ns();
     if (!wd) wd = 1, plat_thread_spawn(watchdog_main, NULL, "watchdog", 0);
     preset_check();
-    int on = N.available && cfg_bool("TOTK_DLAA");
+    int on = backend_ok() && cfg_bool("TOTK_DLAA");
     if (on != D.on) {
         rt_log("dlaa: %s", on ? "on" : "off");
         D.on = on;
