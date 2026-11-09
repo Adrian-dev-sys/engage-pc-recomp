@@ -249,8 +249,29 @@ void res_rt_seen(unsigned w, unsigned h, int fmt) {
     rt_log("resolution: render target %ux%u (format %#x)%s", w, h, fmt, res_rt_scale(w, h) > 1.0f ? ", scaled" : "");
 }
 
+// The scene's share of the render size per TOTK_UPSCALE_MODE (DLSS's ratios): set fullres hands it to
+// SetRenderScale (patch page +0x64); the UI stays at the render size and DLSS / FSR (vk_dlaa.c) scale the scene up.
+static float eng_scene = 1.0f;
+float res_engage_scene_scale(void) { return eng_scene; }
+
+static void engage_scene_scale(void) {
+    static const struct { const char *mode; float k; } modes[] = {
+        {"quality", 2.0f / 3.0f}, {"balanced", 0.58f}, {"performance", 0.5f}, {"ultra", 1.0f / 3.0f}};
+    const char *m = cfg_value("TOTK_UPSCALE_MODE");
+    for (size_t i = 0; i < sizeof modes / sizeof *modes; i++)
+        if (!strcmp(m, modes[i].mode)) eng_scene = modes[i].k;
+    int set = rt_patch_set("fullres");
+    if (set < 0 || !rt_patch_page()) return;
+    *(float *)((uint8_t *)rt_patch_page() + 0x64) = eng_scene;
+    if (eng_scene < 1.0f) {
+        rt_patch_switch(set, 1);   // the mode needs the set, whatever TOTK_FULL_RES says
+        rt_log("resolution: upscaling mode %s, the 3D scene draws at %.0f%% of the render size", m, eng_scene * 100);
+    }
+}
+
 static void engage_res_init(void) {
     decide();
+    engage_scene_scale();
     // the set uwui gives the UI code a 16:9 screen width: right only on an output wider than 16:9
     int uwui = rt_patch_set("uwui");
     if (uwui >= 0 && (uint64_t)R.ow * 9 <= (uint64_t)R.oh * 16) rt_patch_switch(uwui, 0);
