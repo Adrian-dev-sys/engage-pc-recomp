@@ -11,6 +11,9 @@
 // Reads are positional (platform.h plat_file_pread), so threads read the image in parallel without a file-pointer
 // lock. TOTK_ROMFS_MMAP=1 maps the image instead.
 //
+// Player mods (mods.c): the files under each enabled mod's RomFS root are overlays too, checked by identity only (no
+// hash, no manifest); a mod higher in the order beats a lower one and any other overlay (overlay_contest).
+//
 // Overlays: files listed in a directory's manifest.tsv are served in place of the originals. Each line names a RomFS
 // path, the overlay's size and SHA-256 and the original's SHA-256 ("-" adds a file the RomFS lacks; it is numbered
 // after the RomFS's own files, file_count + k in path order). The directories, in this order: TOTK_ROMFS_PATCHES and
@@ -20,10 +23,12 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <strings.h>
 
 #include "cfg.h"
 #include "fs.h"
 #include "host.h"
+#include "mods.h"
 #include "romfs_config.h"
 #include "romfs_path.h"
 #include "platform/platform.h"
@@ -38,7 +43,9 @@ typedef struct { uint64_t offset, size; uint32_t name, len; } Entry;
 _Static_assert(sizeof(Entry) == 24, "index entry layout");
 
 typedef struct { uint32_t volume, pad; uint64_t file_id, size, write_time, create_time; } Identity;   // no padding
-typedef struct { uint64_t index, size; char *path, *name; Identity id; } Overlay;
+// prio: which overlay serves a path two of them give (the higher); romfs-patches 0, the TOTK_ROMFS_MODS manifest 1, a
+// player mod 2 + its distance from the bottom of the order. mod: its index in mods_at + 1, 0 for any other overlay.
+typedef struct { uint64_t index, size; char *path, *name; Identity id; int prio, mod; } Overlay;
 
 static uint8_t *index_bytes;
 static size_t index_size;
@@ -373,6 +380,144 @@ static void heapdef_overlay(void) {
     res_heapdef_served();
 }
 
+// ---- player mods (mods.c): every file under an enabled mod's RomFS root, by identity (no hash; romfs_open still stops
+// on a file that changed after the start). Adapted from TotK Recomp runtime/romfs.c (MIT).
+static uint32_t *folded;   // RomFS indices sorted by name ignoring ASCII case; built on the first mod path that misses
+
+static int folded_order(const void *a, const void *b) {
+    return strcasecmp(entry_name(entry(*(const uint32_t *)a)), entry_name(entry(*(const uint32_t *)b)));
+}
+
+// The RomFS index of name, or of the RomFS path equal to it but for case; UINT64_MAX for a path the RomFS lacks.
+static uint64_t index_any_case(const char *name) {
+    uint64_t i = lower(name);
+    if (i < file_count && !strcmp(entry_name(entry(i)), name)) return i;
+    if (!folded) {
+        folded = malloc(file_count * sizeof *folded);
+        need(folded != NULL, "case-folded index");
+        for (uint64_t k = 0; k < file_count; k++) folded[k] = (uint32_t)k;
+        qsort(folded, file_count, sizeof *folded, folded_order);
+    }
+    uint64_t lo = 0, hi = file_count;
+    while (lo < hi) {
+        uint64_t m = lo + (hi - lo) / 2;
+        if (strcasecmp(entry_name(entry(folded[m])), name) < 0) lo = m + 1;
+        else hi = m;
+    }
+    return lo < file_count && !strcasecmp(entry_name(entry(folded[lo])), name) ? folded[lo] : UINT64_MAX;
+}
+
+static void overlay_push(Overlay o) {
+    if (noverlay == overlay_cap) {
+        overlay_cap = overlay_cap ? overlay_cap * 2 : 16;
+        overlays = realloc(overlays, overlay_cap * sizeof *overlays);
+        need(overlays != NULL, "overlay table");
+    }
+    overlays[noverlay++] = o;
+}
+
+typedef struct { int k, prio; const char *dir, *rel; } ModWalk;
+
+static void mod_walk(int k, int prio, const char *dir, const char *rel);
+
+// One entry of a mod's RomFS folder (mod_walk).
+static int mod_walk_cb(const char *leaf, int kind, uint64_t size, void *ctx) {
+    (void)size;
+    const ModWalk *w = ctx;
+    ModInfo *m = mods_at(w->k);
+    char file[4200], path[4200];
+    if (snprintf(file, sizeof file, "%s/%s", w->dir, leaf) >= (int)sizeof file ||
+        snprintf(path, sizeof path, "%s%s%s", w->rel, *w->rel ? "/" : "", leaf) >= (int)sizeof path) {
+        rt_log("mods: %s: path too long under %s; left out", m->name, w->dir);
+        return 1;
+    }
+    if (kind == PLAT_FS_DIR) {
+        mod_walk(w->k, w->prio, file, path);
+        return 1;
+    }
+    if (kind != PLAT_FS_FILE) return 1;
+    if (!romfs_path_valid_relative(path)) {
+        rt_log("mods: %s: %s is not a RomFS path; left out", m->name, path);
+        return 1;
+    }
+    uint64_t i = index_any_case(path);
+    PlatFile *f = open_read(file);
+    if (!f) {
+        rt_log("mods: %s: cannot open %s; left out", m->name, file);
+        return 1;
+    }
+    Identity id = identity_of(f);
+    plat_file_close(f);
+    char *copy = strdup(file), *rp = strdup(i == UINT64_MAX ? path : entry_name(entry(i)));
+    need(copy && rp, "overlay path copy");
+    overlay_push((Overlay){i == UINT64_MAX ? ADDED : i, id.size, copy, rp, id, w->prio, w->k + 1});
+    return 1;
+}
+
+// The files under dir (a mod's RomFS root; rel: the RomFS path of dir, "" at the root) as overlays of mod k.
+static void mod_walk(int k, int prio, const char *dir, const char *rel) {
+    ModWalk w = {k, prio, dir, rel};
+    plat_fs_list(dir, mod_walk_cb, &w);
+}
+
+// What overlays compete on: the RomFS index, an added file's path; the higher prio first.
+static int contest_order(const void *a, const void *b) {
+    const Overlay *x = a, *y = b;
+    if (x->index != y->index) return (x->index > y->index) - (x->index < y->index);
+    int c = x->index == ADDED ? strcmp(x->name, y->name) : 0;
+    return c ? c : y->prio - x->prio;
+}
+
+static const char *owner_name(const Overlay *o) {
+    return o->mod ? mods_at(o->mod - 1)->name : o->prio ? "romfs_mods" : "the port's patches";
+}
+
+// One overlay per path: the highest prio serves it; the others are dropped and counted on their mod.
+static void overlay_contest(void) {
+    if (!noverlay) return;
+    qsort(overlays, noverlay, sizeof *overlays, contest_order);
+    size_t kept = 0;
+    for (size_t k = 0; k < noverlay; k++) {
+        Overlay *o = &overlays[k], *w = kept ? &overlays[kept - 1] : NULL;
+        if (w && w->index == o->index && (o->index != ADDED || !strcmp(w->name, o->name))) {
+            if (o->mod) {
+                ModInfo *m = mods_at(o->mod - 1);
+                m->overridden++;
+                if (!m->overridden_by[0]) snprintf(m->overridden_by, sizeof m->overridden_by, "%s", owner_name(w));
+            } else if (w->mod) {
+                rt_log("RomFS overlay: %s from mod %s replaces the one of %s", o->name, owner_name(w), owner_name(o));
+            }
+            free(o->path);
+            free(o->name);
+            continue;
+        }
+        if (o->mod) {
+            if (o->index == ADDED) mods_at(o->mod - 1)->added++;
+            else mods_at(o->mod - 1)->replaced++;
+        }
+        overlays[kept++] = *o;
+    }
+    noverlay = kept;
+}
+
+static void mods_overlay_init(void) {
+    mods_scan();
+    int n = mods_count();
+    for (int k = 0; k < n; k++) {
+        const ModInfo *m = mods_at(k);
+        if (m->enabled && (m->kind & MOD_ROMFS) && m->problem == MOD_OK) mod_walk(k, 2 + (n - k), m->romfs, "");
+    }
+}
+
+static void mods_overlay_log(void) {
+    for (int k = 0; k < mods_count(); k++) {
+        const ModInfo *m = mods_at(k);
+        if (!m->enabled || !(m->kind & MOD_ROMFS) || m->problem != MOD_OK) continue;
+        rt_log("mods: %s: %u files served (%u replaced, %u added), %u overridden%s%s", m->name, m->replaced + m->added,
+               m->replaced, m->added, m->overridden, m->overridden ? " by " : "", m->overridden_by);
+    }
+}
+
 static int xbox_prompts_ready;    // romfs-patches-xbox/manifest.tsv was next to romfs-index.bin at start
 static int xbox_prompts_active;   // and overlay_init loaded it
 
@@ -424,8 +569,14 @@ static void overlay_init(void) {
         patches = def;
     }
     const char *dirs[2] = {patches, cfg_get("TOTK_ROMFS_MODS")};
-    for (int i = 0; i < 2; i++)
+    for (int i = 0; i < 2; i++) {
+        size_t first = noverlay;
         if (dirs[i] && *dirs[i] && strcmp(dirs[i], "0")) overlay_load(dirs[i], 0);
+        for (size_t k = first; k < noverlay; k++) overlays[k].prio = i;
+    }
+    mods_overlay_init();
+    overlay_contest();
+    mods_overlay_log();
     heapdef_overlay();
     added_init();
     if (noverlay) qsort(overlays, noverlay, sizeof *overlays, overlay_order);

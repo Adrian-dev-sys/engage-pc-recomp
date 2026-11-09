@@ -15,7 +15,11 @@ typedef enum {
     UI_MENU_FIRST,
     UI_MENU_TITLE = UI_MENU_FIRST,
     UI_MENU_TAB_SCREEN, UI_MENU_TAB_GAME, UI_MENU_TAB_SOUND, UI_MENU_TAB_CONTROLS, UI_MENU_TAB_MENU,
-    UI_MENU_TAB_ADVANCED,
+    UI_MENU_TAB_ADVANCED, UI_MENU_TAB_MODS,
+    UI_MENU_MODS_INSTALLED, UI_MENU_MODS_NONE, UI_MENU_MODS_OPEN, UI_MENU_MODS_OPEN_DESC,
+    UI_MENU_MODS_ROW_DESC,       // printf: files it replaces, files it adds (as of this start)
+    UI_MENU_MODS_OVERRIDDEN,     // printf: files a higher mod serves instead, that mod's name
+    UI_MENU_MODS_MOVE_HINT, UI_MENU_MODS_EMPTY, UI_MENU_MODS_CODE, UI_MENU_MODS_BAD_NAME, UI_MENU_MODS_UNUSED,
     UI_MENU_CONTINUE, UI_MENU_QUIT,
     UI_MENU_ON, UI_MENU_OFF, UI_MENU_AUTO, UI_MENU_DEFAULT_MARK,      // "default" beside the default value
     UI_MENU_AFTER_RESTART,    // note on a setting that is read at start

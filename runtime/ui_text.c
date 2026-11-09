@@ -29,6 +29,21 @@ static const char *const text_en[UI_TEXT_COUNT] = {
     [UI_MENU_TITLE] = "Settings",
     [UI_MENU_TAB_SCREEN] = "Screen", [UI_MENU_TAB_GAME] = "Game", [UI_MENU_TAB_SOUND] = "Sound",
     [UI_MENU_TAB_CONTROLS] = "Controls", [UI_MENU_TAB_MENU] = "Menu", [UI_MENU_TAB_ADVANCED] = "Advanced",
+    [UI_MENU_TAB_MODS] = "Mods", [UI_MENU_MODS_INSTALLED] = "Installed mods",
+    [UI_MENU_MODS_NONE] = "No mods yet. Unpack a mod into the mods folder, one folder per mod with its romfs folder "
+                          "inside (the layout Ryujinx and Yuzu use), and restart the game.",
+    [UI_MENU_MODS_OPEN] = "Open mods folder",
+    [UI_MENU_MODS_OPEN_DESC] = "Shows the folder the game loads mods from. It is created if it is missing.",
+    [UI_MENU_MODS_ROW_DESC] = "Game files it replaces: %u. New files it adds: %u. Changes apply after a restart.",
+    [UI_MENU_MODS_OVERRIDDEN] = "%u of its files come from %s, which is higher in the list.",
+    [UI_MENU_MODS_MOVE_HINT] = "The top face button or Ctrl+Up moves it up, the left face button or Ctrl+Down moves it "
+                               "down. A mod higher in the list wins a file two mods replace.",
+    [UI_MENU_MODS_EMPTY] = "This folder has no romfs files.",
+    [UI_MENU_MODS_CODE] = "This mod patches the game code (exefs: .ips, .pchtxt or code modules), which the recompiled "
+                          "game cannot take, so the whole mod stays off. The common ones (frame rate, ultrawide, level "
+                          "of detail) are built in: see Screen and Game.",
+    [UI_MENU_MODS_BAD_NAME] = "The folder name contains |, which the mod list uses between names. Rename the folder.",
+    [UI_MENU_MODS_UNUSED] = "not used",
     [UI_MENU_CONTINUE] = "Continue", [UI_MENU_QUIT] = "Quit game",
     [UI_MENU_ON] = "On", [UI_MENU_OFF] = "Off", [UI_MENU_AUTO] = "Automatic", [UI_MENU_DEFAULT_MARK] = "default",
     [UI_MENU_AFTER_RESTART] = "after restart", [UI_MENU_SET_BY_ENV] = "set by environment variable",

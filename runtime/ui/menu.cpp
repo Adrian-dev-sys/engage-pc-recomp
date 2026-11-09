@@ -37,6 +37,7 @@ extern "C" {
 #include "cfg.h"
 #include "input.h"
 #include "input_map.h"
+#include "mods.h"
 #include "perfmon.h"
 #include "platform/platform.h"
 #include "sysinfo.h"
@@ -366,7 +367,7 @@ extern "C" void menu_vk_release(void) {
 // TOTK_MENU_TEST_SET=<frame>:<key>=<value>[,<key>=<value>...][;<frame>:...]: cfg_set of each key (TOTK_ prefix
 // optional) at that presented frame; changes live settings with no input, menu open or not. totk.ini is written only by
 // the pseudo-key SAVE=1 (cfg_save, as a row change does; a failed write shows the menu's save note).
-enum { TAB_SCREEN, TAB_GAME, TAB_SOUND, TAB_CONTROLS, TAB_MENU, TAB_ADVANCED, TAB_COUNT };
+enum { TAB_SCREEN, TAB_GAME, TAB_SOUND, TAB_CONTROLS, TAB_MENU, TAB_ADVANCED, TAB_MODS, TAB_COUNT };
 enum { TEST_PAGE_FRAMES = 30, TEST_SETS = 16 };
 struct TestSet { uint64_t frame; char key[64], value[64]; };
 static struct {
@@ -662,6 +663,49 @@ static void tab_screen(float scale) {
     opt_end();
 }
 
+// ---- Mods: the mods folder (mods.c) with switches and the load order. Adapted from TotK Recomp runtime/ui/menu.cpp
+// tab_mods (MIT). The folder was scanned at start; changes apply at the next start.
+static void tab_mods(float scale) {
+    opt_begin("##mods", scale);
+    opt_group(UI_MENU_MODS_INSTALLED);
+    int n = mods_count();
+    if (!n) opt_text(UI_MENU_MODS_NONE);
+    const char *after = mods_changed() ? menu_text(UI_MENU_AFTER_RESTART) : nullptr;
+    for (int i = 0; i < n; i++) {
+        const ModInfo *m = mods_at(i);
+        char id[32], desc[1536], over[512] = "", problem[512] = "";
+        snprintf(id, sizeof id, "##mod%d", i);
+        if (m->overridden) snprintf(over, sizeof over, menu_text(UI_MENU_MODS_OVERRIDDEN), m->overridden, m->overridden_by);
+        UiTextId pid = m->problem == MOD_EMPTY ? UI_MENU_MODS_EMPTY : m->problem == MOD_CODE ? UI_MENU_MODS_CODE
+                     : m->problem == MOD_BAD_NAME ? UI_MENU_MODS_BAD_NAME : UI_TEXT_COUNT;
+        if (pid != UI_TEXT_COUNT) snprintf(problem, sizeof problem, "%s", menu_text(pid));
+        int k = snprintf(desc, sizeof desc, menu_text(UI_MENU_MODS_ROW_DESC), m->replaced, m->added);
+        const char *parts[] = {over, problem, menu_text(UI_MENU_MODS_MOVE_HINT)};
+        for (const char *part : parts)
+            if (*part && k >= 0 && k < (int)sizeof desc) k += snprintf(desc + k, sizeof desc - k, "\n\n%s", part);
+        const char *note = m->enabled && m->problem != MOD_OK ? menu_text(UI_MENU_MODS_UNUSED) : after;
+        int s = opt_text_row(id, m->name, menu_text(m->enabled ? UI_MENU_ON : UI_MENU_OFF), note, desc, true);
+        if (s == 2 || s == -1 || s == 1) {
+            mods_set_enabled(i, !m->enabled);
+            opt_save_soon();
+        } else if ((s == 3 && i > 0) || (s == 4 && i + 1 < n)) {
+            int to = s == 3 ? i - 1 : i + 1;
+            mods_move(i, to - i);
+            snprintf(id, sizeof id, "##mod%d", to);
+            opt_focus_key(id);   // the cursor follows the mod
+            opt_save_soon();
+        }
+    }
+    static uint64_t open_failed;   // plat_now_ns until which the button says it failed
+    if (opt_button("##mods_open", UI_MENU_MODS_OPEN, UI_MENU_MODS_OPEN_DESC,
+                   plat_now_ns() < open_failed ? menu_text(UI_MENU_ACTION_FAILED) : "")) {
+        bool ok = mods_dir()[0] != 0;
+        if (ok) plat_file_mkdir_p(mods_dir());
+        if (!ok || !plat_open_folder(mods_dir())) open_failed = plat_now_ns() + 3000000000ull;
+    }
+    opt_end();
+}
+
 static void tab_game(float scale) {
     opt_begin("##game", scale);
     row_fps_limit();
@@ -879,7 +923,7 @@ static void tab_advanced(float scale) {
 }
 
 static const UiTextId kTabNames[TAB_COUNT] = {UI_MENU_TAB_SCREEN, UI_MENU_TAB_GAME, UI_MENU_TAB_SOUND,
-                                              UI_MENU_TAB_CONTROLS, UI_MENU_TAB_MENU, UI_MENU_TAB_ADVANCED};
+                                              UI_MENU_TAB_CONTROLS, UI_MENU_TAB_MENU, UI_MENU_TAB_ADVANCED, UI_MENU_TAB_MODS};
 static int g_tab;               // the tab shown
 static int g_tab_request = -1;  // select this tab at the next layout; -1 none
 static int g_focus_page = -1;   // this tab's first row takes the cursor once it is shown; -1 none
@@ -932,6 +976,7 @@ static void layout_menu(uint32_t w, uint32_t h, float scale) {
             case TAB_CONTROLS: tab_controls(scale); break;
             case TAB_MENU: tab_menu(scale); break;
             case TAB_ADVANCED: tab_advanced(scale); break;
+            case TAB_MODS: tab_mods(scale); break;
             }
             ImGui::EndTabItem();
         }
