@@ -413,6 +413,10 @@ static void resolve_rt(VkExec *ex) {
                              ex->vp[0][1], ex->vp[0][2], ex->vp[0][3]);
     }
     ex->pass_w = w, ex->pass_h = h, ex->pass_layers = layers;
+    ex->pass_scale = 1.0f;
+    for (int i = 0; i < 8 && ex->pass_scale == 1.0f; i++)
+        if (ex->color[i].image && ex->color[i].img->scale > 0) ex->pass_scale = ex->color[i].img->scale;
+    if (ex->pass_scale == 1.0f && d->image && d->img->scale > 0) ex->pass_scale = d->img->scale;
     ex->pass_ncolor = (uint32_t)n;
     ex->pass_samples = samples ? samples : 1;
     ex->pipe.samples = (uint8_t)ex->pass_samples;
@@ -669,6 +673,8 @@ VkRect2D vk_exec_scissor(const VkExec *ex) {
     if (!ex->has_scissor) return (VkRect2D){{0, 0}, {(uint32_t)w, (uint32_t)h}};
     int64_t x0 = ex->scissor.x, y0 = ex->scissor.y;
     int64_t x1 = x0 + ex->scissor.w, y1 = y0 + ex->scissor.h;
+    float k = ex->pass_scale > 0 ? ex->pass_scale : 1.0f;   // a scaled target: guest pixels to host pixels
+    if (k != 1.0f) x0 = (int64_t)(x0 * k), y0 = (int64_t)(y0 * k), x1 = (int64_t)(x1 * k + 0.999f), y1 = (int64_t)(y1 * k + 0.999f);
     if (x0 < 0) x0 = 0;
     if (y0 < 0) y0 = 0;
     if (x1 > w) x1 = w;

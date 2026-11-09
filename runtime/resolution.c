@@ -197,6 +197,35 @@ static uint64_t pack(unsigned w, unsigned h) { return (uint64_t)h << 32 | w; }
 // Engage (Unity): the set engres (recomp/patches-engage-v200.txt) makes Unity's screen size, the swapchain textures
 // and its 1920x1080 cap read page+0x50/+0x54. The game renders at output size * render scale ("game" = 100%);
 // the present scales that to the window. Read once at start: a change needs a restart.
+// Render targets Engage sizes from asset data, not from the screen (the 640x1080 unit-info and talk character
+// models): their host images are enlarged by the render height / 1080 (vk_texture.c create_tex), so they get the
+// detail of the main scene. TOTK_RT_SCALE_SIZES lists the guest sizes ("640x1080,..."; "off" for none).
+static float rt_k = 1.0f;
+static unsigned rt_sizes[8][2];
+static int rt_nsizes;
+
+float res_rt_scale(unsigned w, unsigned h) {
+    if (rt_k <= 1.0f) return 1.0f;
+    for (int i = 0; i < rt_nsizes; i++)
+        if (rt_sizes[i][0] == w && rt_sizes[i][1] == h) return rt_k;
+    return 1.0f;
+}
+
+static void rt_scale_init(unsigned render_h) {
+    const char *s = cfg_get("TOTK_RT_SCALE_SIZES");
+    if (!s || !*s) s = "640x1080";
+    rt_nsizes = 0;
+    for (const char *p = s; *p && rt_nsizes < 8;) {
+        unsigned w, h;
+        if (sscanf(p, "%ux%u", &w, &h) == 2) rt_sizes[rt_nsizes][0] = w, rt_sizes[rt_nsizes++][1] = h;
+        p = strchr(p, ',');
+        if (!p) break;
+        p++;
+    }
+    rt_k = rt_nsizes && render_h > BASE_H ? (float)render_h / BASE_H : 1.0f;
+    if (rt_k > 1.0f) rt_log("resolution: render targets %s drawn at %.3fx their size", s, rt_k);
+}
+
 static void engage_res_init(void) {
     decide();
     const char *s = cfg_value("TOTK_RENDER_SCALE");
@@ -219,6 +248,7 @@ static void engage_res_init(void) {
     p[0] = w;
     p[1] = h;
     rt_patch_switch(set, 1);
+    rt_scale_init(h);
     rt_log("resolution: Engage renders at %ux%u (output %ux%u, render scale %.0f%%)", w, h, R.ow, R.oh, k * 100);
 }
 

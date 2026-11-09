@@ -356,10 +356,11 @@ static int sub_resolve(const tex_t *t, const view_t *v, int has_v, const NVNcopy
     s->level = has_v && v->set_levels ? v->base_level : 0;
     s->layer0 = has_v && v->set_layers ? v->min_layer : 0;
     uint32_t lw = max1(img->width >> s->level), lh = max1(img->height >> s->level);
-    s->x = r->xoffset, s->y = r->yoffset, s->z = r->zoffset;
+    float k = img->scale > 0 ? img->scale : 1.0f;   // a scaled render target: guest texels to host texels
+    s->x = (int32_t)(r->xoffset * k), s->y = (int32_t)(r->yoffset * k), s->z = r->zoffset;
     s->nz = r->depth > 0 ? (uint32_t)r->depth : 1;
-    s->w = r->width > 0 ? (uint32_t)r->width : defaults_to_level ? (s->x < (int32_t)lw ? lw - (uint32_t)s->x : 0) : 0;
-    s->h = r->height > 0 ? (uint32_t)r->height : defaults_to_level ? (s->y < (int32_t)lh ? lh - (uint32_t)s->y : 0) : 0;
+    s->w = r->width > 0 ? (uint32_t)(r->width * k + 0.5f) : defaults_to_level ? (s->x < (int32_t)lw ? lw - (uint32_t)s->x : 0) : 0;
+    s->h = r->height > 0 ? (uint32_t)(r->height * k + 0.5f) : defaults_to_level ? (s->y < (int32_t)lh ? lh - (uint32_t)s->y : 0) : 0;
     int is3d = img->type == VK_IMAGE_TYPE_3D;
     uint32_t layers = is3d ? 1 : (uint32_t)s->z + s->nz, first = is3d ? 0 : s->layer0;
     if (s->level >= img->levels || s->x < 0 || s->y < 0 || s->z < 0 || !s->w || !s->h ||
