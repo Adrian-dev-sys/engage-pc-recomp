@@ -417,6 +417,16 @@ static void resolve_rt(VkExec *ex) {
     for (int i = 0; i < 8 && ex->pass_scale == 1.0f; i++)
         if (ex->color[i].image && ex->color[i].img->scale > 0) ex->pass_scale = ex->color[i].img->scale;
     if (ex->pass_scale == 1.0f && d->image && d->img->scale > 0) ex->pass_scale = d->img->scale;
+    if (ex->pass_scale != 1.0f) {   // diagnostics: an attachment of another scale clips the pass (res_rt_scale)
+        static int mixed;
+        for (int i = 0; i < 9 && mixed < 16; i++) {
+            const VkExecTarget *t = i < 8 ? &ex->color[i] : d;
+            if (t->image && t->img->scale != ex->pass_scale)
+                mixed++, rt_log("resolution: pass mixes scaled and unscaled targets: %s %ux%u fmt %#x (scale %.2f) in a "
+                                "%.2fx pass", i < 8 ? "colour" : "depth", t->width, t->height, t->nvn_format, t->img->scale,
+                                ex->pass_scale);
+        }
+    }
     ex->pass_ncolor = (uint32_t)n;
     ex->pass_samples = samples ? samples : 1;
     ex->pipe.samples = (uint8_t)ex->pass_samples;

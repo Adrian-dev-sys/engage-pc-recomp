@@ -1332,6 +1332,10 @@ int vk_texture_read_image(const tex_t *t, const view_t *v, const NVNcopyRegion *
     lock();
     Tex *e = entry_of(t);
     int ok = 0;
+    if (e && e->pub.scale != 1.0f) {   // diagnostics: a CPU read of a scaled render target (res_rt_scale)
+        static int n;
+        if (n++ < 16) rt_log("resolution: CPU read of a scaled %ux%u texture (fmt %#x)", e->pub.width, e->pub.height, t->d.format);
+    }
     if (e) {
         make_fresh(e);
         ok = image_texels(e, &g, r, dst, 0);

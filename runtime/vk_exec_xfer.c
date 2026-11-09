@@ -416,6 +416,11 @@ static int buffer_side(const VkExec *ex, const Sub *s, uint64_t addr, uint64_t *
 static void copy_buffer_image(VkExec *ex, const p_copy_b2t *p, int to_image) {
     Sub s;
     if (!sub_resolve(p->tex, &p->view, p->has_view, &p->r, 1, &s)) return;
+    if (s.img->scale != 1.0f) {   // diagnostics: guest-sized buffer side of a scaled image (res_rt_scale)
+        static int n;
+        if (n++ < 16) rt_log("resolution: %s of a scaled %ux%u texture (fmt %#x)", to_image ? "buffer-to-texture copy" :
+                             "texture-to-buffer copy", s.img->width, s.img->height, p->tex->d.format);
+    }
     uint64_t size;
     VkBufferImageCopy c;
     VkMemSpan m;
