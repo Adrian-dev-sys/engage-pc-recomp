@@ -35,7 +35,7 @@ static const char *const known[] = {
     "BIND_LSTICK_RIGHT", "BIND_LSTICK_UP", "BIND_MINUS",
     "BIND_PLUS", "BIND_R", "BIND_RCLICK", "BIND_RIGHT", "BIND_RSTICK_DOWN", "BIND_RSTICK_LEFT", "BIND_RSTICK_RIGHT", "BIND_RSTICK_UP",
     "BIND_SKIP", "BIND_STATS", "BIND_UP", "BIND_X", "BIND_Y",
-    "BIND_ZL", "BIND_ZR", "BLOCK_VIEWS_3D", "CLOTH_REALTIME", "COLOR_BRIGHTNESS", "COLOR_CONTRAST", "COLOR_GAMMA", "COLOR_PRESET", "COLOR_SATURATION", "CORE_DIAG", "CRIT", "CRIT_OUT", "DESC_TEMPLATE", "DEVICE_PROFILE", "DLAA", "DLAA_FLIPY", "DLAA_JITTER", "DLAA_MV", "DLAA_MVDEBUG", "DLSS_PRESET", "DUMP", "DUMP_BUF", "DUMP_DIR", "DUMP_LOG", "ENGAGE_LOD",
+    "BIND_ZL", "BIND_ZR", "BLOCK_VIEWS_3D", "CLOTH_REALTIME", "COBALT_COMBAT_POPUPS", "COBALT_COMBAT_UI", "COBALT_RING_RUMBLE", "COBALT_SUPPORT_OUTFIT", "COLOR_BRIGHTNESS", "COLOR_CONTRAST", "COLOR_GAMMA", "COLOR_PRESET", "COLOR_SATURATION", "CORE_DIAG", "CRIT", "CRIT_OUT", "DESC_TEMPLATE", "DEVICE_PROFILE", "DLAA", "DLAA_FLIPY", "DLAA_JITTER", "DLAA_MV", "DLAA_MVDEBUG", "DLSS_PRESET", "DUMP", "DUMP_BUF", "DUMP_DIR", "DUMP_LOG", "ENGAGE_LOD",
     "EXEFS", "FAST_FORWARD", "FEEDBACK", "FIX_C0", "FIX_ZERO", "FLIGHT", "FLIGHT_AT", "FLIGHT_DIR", "FLIGHT_FRAMES", "FLIGHT_SPIKE_MS",
     "FLIGHT_THUMBS", "FOV", "FOV_PATCH", "FPS60", "FPS_LIMIT", "FREEZE_IDLE", "FREE_CORES", "FULLSCREEN", "FULL_RES", "GPL", "GPL_DRAW_BUILD", "GPU",
     "GPU_INDEX", "GPU_NAME", "HIGHFPS_FIX", "INPUT", "INPUT_RECORD", "INPUT_SCRIPT", "LANG", "LIB_PREBUILD",
@@ -57,6 +57,8 @@ static const char *const known[] = {
 static const struct { const char *key, *section; } sections[] = {
     {"FPS_LIMIT", "frame rate"}, {"FPS60", "frame rate"},
     {"MODS_DIR", "mods"}, {"MODS_ORDER", "mods"}, {"MODS_DISABLED", "mods"},
+    {"COBALT_COMBAT_POPUPS", "mods"}, {"COBALT_COMBAT_UI", "mods"}, {"COBALT_RING_RUMBLE", "mods"},
+    {"COBALT_SUPPORT_OUTFIT", "mods"},
     {"REALTIME", "frame rate"}, {"CLOTH_REALTIME", "frame rate"}, {"HIGHFPS_FIX", "frame rate"},
     {"FULLSCREEN", "display"}, {"WINDOW_SIZE", "display"}, {"PERF_OVERLAY", "display"}, {"VK_PRESENT", "display"},
     {"GPU_INDEX", "display"}, {"OUTPUT_RES", "display"}, {"RENDER_SCALE", "display"}, {"UPSCALER", "display"},
@@ -110,6 +112,8 @@ static const CfgMeta metas[] = {
     // Game
     {"FPS_LIMIT", "60", "30|40|45|60|90|120|144|display", LIVE}, {"FPS60", "1", "0|1", LIVE},
     {"REALTIME", "1", "0|1", RESTART}, {"CLOTH_REALTIME", "1", "0|1", RESTART},
+    {"COBALT_COMBAT_POPUPS", "1", "0|1", LIVE}, {"COBALT_COMBAT_UI", "1", "0|1", LIVE}, {"COBALT_RING_RUMBLE", "0", "0|1", LIVE},
+    {"COBALT_SUPPORT_OUTFIT", "0", "0|1", LIVE},
     {"HIGHFPS_FIX", "1", "0|1", RESTART},
     {"LANG", "", "ja|en-US|fr|de|it|es|zh-CN|ko|nl|pt|ru|zh-TW|en-GB|fr-CA|es-419|zh-Hans|zh-Hant|pt-BR", RESTART},
     {"OPERATION_MODE", "docked", "docked|handheld", RESTART},

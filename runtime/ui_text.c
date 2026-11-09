@@ -60,6 +60,22 @@ static const char *const text_en[UI_TEXT_COUNT] = {
     [UI_MENU_MODS_NONE] = "No mods yet. Unpack a mod into the mods folder, one folder per mod with its romfs folder "
                           "inside (the layout Ryujinx and Yuzu use), and restart the game.",
     [UI_MENU_MODS_OPEN] = "Open mods folder",
+    [UI_MENU_COBALT] = "Cobalt",
+    [UI_MENU_COBALT_POPUPS] = "Combat damage numbers",
+    [UI_MENU_COBALT_POPUPS_DESC] = "The damage numbers that pop up during battle animations.",
+    [UI_MENU_COBALT_UI] = "Combat interface",
+    [UI_MENU_COBALT_UI_DESC] = "The HP bars and battle forecast shown during battle animations. Off hides them.",
+    [UI_MENU_COBALT_RING] = "Ring polish rumble",
+    [UI_MENU_COBALT_RING_DESC] = "The controller rumbles while you polish a bond ring.",
+    [UI_MENU_COBALT_OUTFIT] = "Outfits in supports",
+    [UI_MENU_COBALT_OUTFIT_DESC] = "Characters keep the outfit they wear in support conversations and other scenes "
+                                   "that would switch them to their default attire.",
+    [UI_MENU_COBALT_MODE] = "Game mode",
+    [UI_MENU_COBALT_MODE_DESC] = "The loaded save's mode. Classic: fallen units are lost. Casual: they return after the "
+                                 "battle. Phoenix: they return on the next turn. Saved with the game.",
+    [UI_MENU_COBALT_CASUAL] = "Casual",
+    [UI_MENU_COBALT_CLASSIC] = "Classic",
+    [UI_MENU_COBALT_PHOENIX] = "Phoenix",
     [UI_MENU_MODS_OPEN_DESC] = "Shows the folder the game loads mods from. It is created if it is missing.",
     [UI_MENU_MODS_ROW_DESC] = "Game files it replaces: %u. New files it adds: %u. Changes apply after a restart.",
     [UI_MENU_MODS_OVERRIDDEN] = "%u of its files come from %s, which is higher in the list.",

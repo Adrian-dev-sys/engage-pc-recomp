@@ -264,3 +264,11 @@ hook cobalt_gmap_info main 252aac0            # App.GmapMapInfoContent::SetMapIn
 hook cobalt_gauge_cctor main 2026630          # MapUIGauge::.cctor: patches/icon/mapstatus names
 hook cobalt_gauge_on_enable main 201f3d0      # MapUIGauge::OnEnable(0): sprites for the added names
 hook cobalt_gauge_get_sprite main 201f7d0     # MapUIGauge::GetSprite(int): any index of the longer array
+hook cobalt_damage_popup main 2979280         # Combat.HUDPopupGroup::DamagePopup(1): F1 > Mods combat damage numbers (runtime/cobalt_extras.c)
+hook cobalt_fade_in_hud main 29368f0          # Combat.CombatWorld::FadeInHUD(0): F1 > Mods combat interface
+hook cobalt_clean_ring main 241ee00           # App.RingCleaningSequence::CleanRing(2): ring polish rumble
+hook cobalt_rub_effect main 22d7f80           # App.RingCleaning.EffectController::PlayRubEffect(0): ring polish rumble
+hook cobalt_cleaning_start main 24172e0       # App.RingCleaningClothAnimationEvent::CleaningStartEvent(0): ring polish rumble
+hook cobalt_save_item main 1d66470            # App.SaveDataMenu.MenuItemContent::SetupByMenuItem(1): Phoenix saves labelled
+hook cobalt_engage_zone main 232e960          # App.GodData::GetEngageZonePrefabPath(1): zone remapped by nickname
+hook cobalt_demo_outfit main 1bb5f60         # App.AssetTable.Result::GetForDemo(3): F1 > Mods outfits in supports

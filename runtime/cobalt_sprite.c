@@ -5,6 +5,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "cobalt_extras.h"
 #include "cobalt_sprite.h"
 #include "cobalt_voice.h"
 #include "hooks.h"
@@ -287,6 +288,7 @@ static void add_default_unit_sprites(Cpu *c);
 
 static int post_load_resource(Cpu *c) {
     hook_original(c, "cobalt_post_load_resource", c->x[0], c->x[1], 0, 0);
+    cobalt_extras_capture(c);
     int added = 0, changed = 0;
     uint64_t gi = statics(c, SLOT_GAMEICON), ft = statics(c, SLOT_FACETHUMB);
     if (ft)
