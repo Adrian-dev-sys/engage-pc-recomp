@@ -55,14 +55,24 @@ take no time; the first one lists the game's bundle CAB names once (`profile\cob
 - Cobalt's binary patches are built in (patch set `cobalt`, `TOTK_COBALT_PATCHES`, on): larger AssetTable and skill
   tables, the DragonAttributeCommand fix.
 
-Not supported yet: Cobalt's voice handling (`CobaltEvent:` markers in `.wem` files, `Voice="Mod!Fallback"`), root-level
-`.lua` scripts and Cobalt's Lua functions, `patches\xml\Support.xml`, custom sprites (`patches\icon`, `patches\ui`).
+- Voices (`runtime/cobalt_voice.c`): a character's voice event plays `<event>_<person>` when a mod's bank has it,
+  `Voice="Mod!Fallback"` falls back, and `CobaltEvent:<event>_Original` markers play the game's own line.
+- Root-level `<Name>.lua` scripts run when a map opens in the Somniel, with Cobalt's Lua functions (`CobaltNotice`,
+  `ItemGainSilent`, `UnitSetJob`, `UnitSetLevel`, `UnitLearnJobSkill`, `ItemGift`, `MenuItemShopShow`,
+  `MenuWeaponShopShow`, `MenuRefineShopShow`, `AddBondRing`, `HasPurchasedSeasonPass`). The game's Lua `Log()` writes
+  to the log (`runtime/cobalt_lua.c`).
+- `patches\xml\Support.xml`: additional supports per character group, with the experience curve `ExpType`
+  (`runtime/cobalt_support.c`). The characters must also be in `Reliance.xml`.
+
+Not supported yet: custom sprites (`patches\icon`, `patches\ui`), Cobalt's own extras (its settings menu, Phoenix
+mode, smithy shortcut, rumble), `MapSetSize` / `MapSetCoords`.
 Not possible: `.nro` code plugins and `.ips` code patches (logged; the mod's data still loads). They change ARM64
 code, which the recompiled game does not have at run time.
 
 Hooks: a `hook <name> main <offset>` line in `recomp/patches-engage-v200.txt` makes that lifted function call
 `runtime/hooks.c` first (regenerate with gen.py). `tools/il2cpp_map.py --find <Class::Method>` prints a managed
-method's offset (from `build/engage-v200/il2cpp-methods.tsv`).
+method's offset, parameter types and static flag (`build/engage-v200/il2cpp-methods.tsv`). `tools/il2cpp_usages.py
+--find` prints the metadata-usage slot of a generic method or a class, through which a hook calls it as the game does.
 
 Code: `runtime/cobalt.c` (merge, cache, banks), `runtime/hooks.c`, `runtime/unityfs.c` (bundles, LZ4, LZMA), `runtime/mods.c` `cobalt_layout`,
 `runtime/romfs.c` (`romfs_base_read`, `romfs_cobalt_overlay`, `COBALT_PRIO`).
