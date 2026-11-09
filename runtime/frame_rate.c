@@ -133,7 +133,7 @@ static void frame_limit_live(void) {
 }
 
 // Engage's fps60 sites (_local/patches-engage-v200.txt) read page+0x40 = vSyncCount as a float (frame time * 60),
-// +0x44 = the mod's movement factor 1/15 at 60 scaled the same way, +0x4c = whole vsyncs for get_vSyncCount. The
+// +0x44 = the mod's movement factor 1/15 at 60 scaled the same way, +0x4c = whole vsyncs for get_vSyncCount, +0x58 = 30/fps. The
 // integer is the running sum of the float handed out in whole steps (120 fps: 1, 0, 1, 0), so frame counters keep
 // game time. The float is the 5-frame average display interval, snapped to the limit when within 15% of it, at most
 // 2 (a slower frame slows the game, as at 30 on the console).
@@ -144,6 +144,7 @@ static void engage_store(double v) {
     float *p = (float *)((uint8_t *)rt_patch_page() + 0x40);
     p[0] = (float)v;
     p[1] = (float)(v / 15.0);
+    p[6] = (float)(v / 2.0);   // +0x58: 30/fps, per-frame steps tuned for 30 fps (MapCursor camera)
     eg_acc += v;
     uint32_t n = (uint32_t)floor(eg_acc + 1e-6);
     eg_acc -= n;

@@ -94,6 +94,10 @@ site fps60 main 2dc5a9c 1e2202a2 @page:x8 bd404102   # scvtf s2, w21: vSyncCount
 # 0.35 -> 0 at 170 fps): the count becomes the whole steps of page+0x4c, the time the exact page+0x40 / 60.
 site fps60 main 250ceb0 a9bf7bfd @page:x0 b9404c00 d65f03c0   # GameTime.get_VsyncDeltaCount: whole vsyncs this frame
 site fps60 main 250cf90 1e220100 @page:x8 bd404100   # GameTime.get_VsyncDeltaTime: scvtf s0, w8 -> exact vsyncs (x8 rewritten next)
+# App.MapCursor.TickInputRotate adds a fixed camera tilt/rotation step every frame (tuned for 30 fps); the step is
+# scaled by page+0x58 = 30/fps.
+site fps60 main 29b9760 1e200940 1e200940 @page:x8 bd405901 1e210800   # tilt step: fmul s0, s10, s0; * 30/fps
+site fps60 main 29b9bf4 1e290d0b 1e290d0b @page:x9 bd405920 1e20096b   # rotation step: fcsel s11, s8, s9, eq; * 30/fps
 # Resolution: Unity's 1920x1080 screen size, swapchain textures and size cap read page+0x50 (width) and +0x54
 # (height), written by runtime/resolution.c engage_res_init from output_res * render_scale. On when not 1920x1080.
 set engres TOTK_ENGAGE_RES 0
