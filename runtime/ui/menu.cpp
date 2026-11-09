@@ -562,6 +562,18 @@ static void row_fps_limit() {
     }
     const char *set = cfg_get("TOTK_FPS_LIMIT"), *old = cfg_get("TOTK_FPS60");
     int cur = (!set || !*set) && old && !strcmp(old, "0") ? 0 : -1;
+    if (rt_game_id == 1) {   // Engage: no 144, the monitor rate stops at 120 (frame_rate.c ENGAGE_MAX_HZ)
+        if (hz > 120) {
+            snprintf(display, sizeof display, menu_text(UI_MENU_FPS_DISPLAY_HZ), 120.0);
+            names[N - 1] = display;
+        }
+        const char *ev[N - 1], *en[N - 1];
+        for (int i = 0, j = 0; i < N; i++)
+            if (strcmp(vals[i], "144")) ev[j] = vals[i], en[j++] = names[i];
+        if (set && atoi(set) > 120) cur = 5;   // older ini values above 120 run at 120
+        opt_choice_list("TOTK_FPS_LIMIT", UI_MENU_FPS_LIMIT, ev, en, N - 1, UI_MENU_FPS_LIMIT_DESC_ENGAGE, cur);
+        return;
+    }
     opt_choice_list("TOTK_FPS_LIMIT", UI_MENU_FPS_LIMIT, vals, names, N, UI_MENU_FPS_LIMIT_DESC, cur);
 }
 
@@ -637,6 +649,7 @@ static void tab_screen(float scale) {
     if (rt_game_id == 1) {   // Engage: vk_dlaa.c, resolution.c res_rt_scale
         opt_group(UI_MENU_AA);
         opt_toggle("TOTK_FULL_RES", UI_MENU_FULL_RES, UI_MENU_FULL_RES_DESC);
+        opt_toggle("TOTK_ENGAGE_LOD", UI_MENU_LOD, UI_MENU_LOD_DESC);
         opt_toggle("TOTK_DLAA", UI_MENU_DLAA, UI_MENU_DLAA_DESC);
         static const UiTextId preset[] = {UI_MENU_DLSS_PRESET_DEFAULT, UI_MENU_DLSS_PRESET_K, UI_MENU_DLSS_PRESET_J,
                                           UI_MENU_DLSS_PRESET_E};

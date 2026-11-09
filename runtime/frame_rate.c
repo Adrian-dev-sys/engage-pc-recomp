@@ -103,6 +103,13 @@ static int fps60_set = -2;
 static unsigned limit_seen;
 static int limit_read;
 static int limit_hz = -1;   // 0: display; -1 before the first read
+#define ENGAGE_MAX_HZ 120   // Engage: above 120 some game timers break (XP bars stop filling)
+
+// The monitor's refresh rate as the "display" limit (Engage: at most ENGAGE_MAX_HZ).
+static double display_hz(void) {
+    double r = gfx_window_refresh_hz();
+    return RT_ENGAGE && r > ENGAGE_MAX_HZ ? ENGAGE_MAX_HZ : r;
+}
 
 static int limit_parse(void) {
     const char *e = cfg_get("TOTK_FPS_LIMIT"), *old = cfg_get("TOTK_FPS60");
@@ -110,6 +117,7 @@ static int limit_parse(void) {
     if (!strcmp(e, "display")) return 0;
     char *end;
     long n = strtol(e, &end, 10);
+    if (RT_ENGAGE && !*end && n > ENGAGE_MAX_HZ) return ENGAGE_MAX_HZ;
     if (!*end && n >= LIMIT_MIN_HZ && n <= LIMIT_MAX_HZ) return (int)n;
     rt_log("frame rate: TOTK_FPS_LIMIT=%s is not 30..360 or display; 60", e);
     return 60;
@@ -154,7 +162,7 @@ static void engage_store(double v) {
 static void engage_frame(double dt) {
     static double logged_hz;
     if (fps60_set < 0 || !rt_patch_page()) return;
-    double hz = limit_hz ? limit_hz : gfx_window_refresh_hz();
+    double hz = limit_hz ? limit_hz : display_hz();
     if (hz < LIMIT_MIN_HZ) hz = 60;
     if (hz > LIMIT_MAX_HZ) hz = LIMIT_MAX_HZ;
     double nominal = 60.0 / hz, v = nominal;
@@ -191,7 +199,7 @@ int frame_step_unity_unlocked(void) {
 
 uint64_t frame_step_cap_ns(void) {
     frame_limit_live();
-    double hz = limit_hz ? limit_hz : gfx_window_refresh_hz();
+    double hz = limit_hz ? limit_hz : display_hz();
     if (hz < LIMIT_MIN_HZ) hz = 60;   // display rate unknown (no window yet)
     if (hz > LIMIT_MAX_HZ) hz = LIMIT_MAX_HZ;
     return (uint64_t)(1e9 / hz + 0.5);
@@ -202,7 +210,7 @@ uint64_t frame_step_cap_ns(void) {
 double frame_step_limit_hz(void) {
     int hz = limit_hz;
     if (hz < 0) return 0;
-    double r = hz ? hz : gfx_window_refresh_hz();
+    double r = hz ? hz : display_hz();
     if (r < LIMIT_MIN_HZ) r = 60;
     return !step_word && !RT_ENGAGE && r > 60 ? 60 : r > LIMIT_MAX_HZ ? LIMIT_MAX_HZ : r;
 }
