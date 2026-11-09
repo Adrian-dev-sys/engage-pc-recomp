@@ -213,3 +213,22 @@ site engres main a65e70 52808703 @page:x3 b9405463   # mov w3, #0x438: display s
 site engres main a65e7c 5280f002 @page:x2 b9405042   # mov w2, #0x780: display surface setup: width
 site engres main 4b0158 52808708 @page:x8 b9405508   # mov w8, #0x438: size cap min(h, 1080): height
 site engres main 4b0168 5280f009 @page:x9 b9405129   # mov w9, #0x780: size cap min(w, 1920): width
+
+# Cobalt's table expansions and fix (github.com/Raytwo/Cobalt src/lib.rs, Patch::in_text), so mods made for Cobalt
+# that grow these tables load: AssetTable capacity 0x1000 -> 0x2000 entries and its per-kind lists 0x100 -> 0x200,
+# the skill table 0x500 -> 0x2000, and DragonAttributeCommand's value 8.0 -> 16.0.
+set cobalt TOTK_COBALT_PATCHES 1
+site cobalt main 1baf960 52820001 321303e1   # mov w1, #0x1000 -> #0x2000: AssetTable capacity
+site cobalt main 1baf990 52802001 321703e1   # mov w1, #0x100 -> #0x200: AssetTable list capacity
+site cobalt main 1baf9b8 52802001 321703e1   # mov w1, #0x100 -> #0x200
+site cobalt main 1baf9e0 52802001 321703e1   # mov w1, #0x100 -> #0x200
+site cobalt main 1bafb2c 52802002 321703e2   # mov w2, #0x100 -> #0x200
+site cobalt main 1bafbfc 52802003 321703e3   # mov w3, #0x100 -> #0x200
+site cobalt main 1bafc04 52802004 321703e4   # mov w4, #0x100 -> #0x200
+site cobalt main 1bafef0 11200129 113ffd29   # add w9, w9, #0x800 -> #0xfff
+site cobalt main 211ce04 11200021 113ffc21   # add w1, w1, #0x800 -> #0xfff
+site cobalt main 247dd08 5280a001 52840001   # mov w1, #0x500 -> #0x2000: skill table capacity
+site cobalt main 247de18 5280a001 52840001   # mov w1, #0x500 -> #0x2000
+site cobalt main 249eab4 7114037f 71400b7f   # cmp w27, #0x500 -> #0x2000: skill index bound
+site cobalt main 249ed70 711402bf 71400abf   # cmp w21, #0x500 -> #0x2000
+site cobalt main 21f8420 1e241000 1e261000   # fmov s0, #8.0 -> #16.0: DragonAttributeCommand value
