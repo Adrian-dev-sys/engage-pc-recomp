@@ -106,6 +106,8 @@ static struct {
     int vb_valid;
     uint8_t support[SUPPORT_BYTES];      // last support buffer and where it lives
     float sup_in[4];                     // the support_fill arguments it was filled from
+    float sup_ts[73];                    // ... and the texture scales (support_scales)
+    int32_t sup_fc;
     VkBuffer sup_buf;
     VkDeviceSize sup_off;
     int sup_valid;
@@ -1425,7 +1427,32 @@ static void support_in(const VkExec *ex, float in[4]) {   // what support_fill r
     in[3] = ex->pass_scale > 0 ? ex->pass_scale : 1.0f;
 }
 
-static void support_fill(uint8_t *b, float w, float h, float point_size, float scale) {
+// render_scale[1 + i] of the i-th texture binding of a stage (vertex: after the fragment stage's, whose count goes to
+// FragmentRenderScaleCount): the shaders multiply texelFetch coordinates by it and divide textureSize (Ryujinx
+// TexelFetchScale / TextureSizeUnscale), so a texture enlarged by res_rt_scale reads like the guest-sized one. Only
+// after the first such texture; until then every scale is 1.
+static void support_scales(VkExec *ex, const VkPipeInfo *info, float ts[73], int32_t *fcount) {
+    for (int i = 0; i < 73; i++) ts[i] = 1.0f;
+    *fcount = 0;
+    if (!vk_texture_scaled_any) return;
+    int32_t idx[GFX_STAGE_CS + 1] = {0}, fc = 0;
+    for (uint32_t i = 0; i < info->n_bindings; i++)
+        if (info->bindings[i].kind == GFX_RES_TEX && info->bindings[i].stage == GFX_STAGE_FS) fc++;
+    vk_texture_lock();
+    for (uint32_t i = 0; i < info->n_bindings; i++) {
+        const VkPipeBinding *b = &info->bindings[i];
+        if (b->kind != GFX_RES_TEX || b->stage > GFX_STAGE_CS) continue;
+        int k = 1 + idx[b->stage]++ + (b->stage == GFX_STAGE_VS ? fc : 0);
+        if (k >= 73 || (b->count && b->count != 1) || b->type == VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER) continue;
+        uint64_t h = vk_exec_resource_handle(ex, b->res, nvn_stage_of(b->stage), 0, 0);
+        const VkTexImage *img = h ? vk_texture_by_id_locked((int)(h & 0xfffff), NULL, NULL) : NULL;
+        if (img && img->scale > 0 && img->scale != 1.0f) ts[k] = img->scale;
+    }
+    vk_texture_unlock();
+    *fcount = fc;
+}
+
+static void support_fill(uint8_t *b, float w, float h, float point_size, float scale, const float ts[73], int32_t fcount) {
     memset(b, 0, SUPPORT_BYTES);
     float inv[4] = {w > 0 ? 2.0f / w : 0, h > 0 ? 2.0f / h : 0, 0, 0}, size[4] = {w, h, 0, 0};
     memcpy(b + 144, inv, 16);
@@ -1433,6 +1460,8 @@ static void support_fill(uint8_t *b, float w, float h, float point_size, float s
     const float one = 1.0f;
     memcpy(b + 1392, &point_size, 4);   // point_size (translator patch 0008): vertex shaders that write none output it
     for (int i = 0; i < 73; i++) memcpy(b + 192 + 16 * i, &one, 4);   // render scale 1: the host renders at guest size
+    for (int i = 1; i < 73; i++) memcpy(b + 192 + 16 * i, &ts[i], 4);
+    memcpy(b + 176, &fcount, 4);   // FragmentRenderScaleCount: where the vertex stage's scales start
     memcpy(b + 192, &scale, 4);   // render_scale[0]: gl_FragCoord is divided by it (a scaled target, res_rt_scale)
 }
 
@@ -1697,12 +1726,15 @@ static void bind_resources(VkExec *ex, const VkPipeInfo *info) {
         VkDescSlot *o = &d[nd];
         int st = nvn_stage_of(b->stage), kind = 0;   // kind: 0 buffer, 1 image, 2 texel buffer view
         if (b->kind == VK_PIPE_SUPPORT) {
-            float in[4];
+            float in[4], ts[73];
+            int32_t fc;
             support_in(ex, in);
-            if (!B.sup_valid || memcmp(in, B.sup_in, sizeof in)) {   // support_fill reads only these
+            support_scales(ex, info, ts, &fc);
+            if (!B.sup_valid || memcmp(in, B.sup_in, sizeof in) || memcmp(ts, B.sup_ts, sizeof ts) || fc != B.sup_fc) {
                 uint8_t tmp[SUPPORT_BYTES];
-                support_fill(tmp, in[0], in[1], in[2], in[3]);
+                support_fill(tmp, in[0], in[1], in[2], in[3], ts, fc);
                 memcpy(B.sup_in, in, sizeof in);
+                memcpy(B.sup_ts, ts, sizeof ts), B.sup_fc = fc;
                 if (!B.sup_valid || memcmp(tmp, B.support, SUPPORT_BYTES)) {   // a new buffer only when the contents changed
                     VkBuffer sb;
                     VkDeviceSize so;
