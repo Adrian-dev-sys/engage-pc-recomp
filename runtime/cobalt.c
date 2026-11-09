@@ -18,6 +18,7 @@
 
 #include "cobalt.h"
 #include "fs.h"
+#include "hooks.h"
 #include "host.h"
 #include "mods.h"
 #include "platform/platform.h"
@@ -1387,6 +1388,83 @@ static void order_by_dependencies(void) {
     }
 }
 
+// ======== new Wwise banks: loaded just before the game's default banks, as Cobalt's load_default_sound_banks does
+// (it puts them first in GameSound's default bank list). Hooks (recomp/patches-engage-v200.txt): cobalt_default_banks
+// on GameSound's default bank loader, cobalt_load_bank on SoundManager's LoadBank(this, name, method).
+#define AUDIO_DIR SA "/Audio/GeneratedSoundBanks/Switch"
+static char banks[64][128];
+static int nbanks;
+static volatile int32_t banks_pending;
+
+static void bank_cb(const char *file, const char *rel, uint64_t size, void *ctx) {
+    (void)file, (void)size;
+    Map *base = ctx;
+    const char *leaf = strrchr(rel, '/');
+    leaf = leaf ? leaf + 1 : rel;
+    if (!ends_ci(leaf, ".bnk") || nbanks == (int)(sizeof banks / sizeof *banks)) return;
+    char stem[128], lo[128];
+    snprintf(stem, sizeof stem, "%.*s", (int)(strlen(leaf) - 4), leaf);
+    lower_copy(lo, stem, sizeof lo);
+    if (map_get(base, lo)) return;   // replaces a game bank: the game loads it already
+    for (int i = 0; i < nbanks; i++)
+        if (!strcasecmp(banks[i], stem)) return;
+    snprintf(banks[nbanks++], sizeof *banks, "%s", stem);
+}
+
+// An Il2CppString in host memory (never freed): klass, monitor, length, UTF-16 characters.
+static uint64_t il2cpp_string(uint64_t klass, const char *s) {
+    size_t n = strlen(s);
+    uint8_t *o = calloc(1, 0x14 + 2 * (n + 1));
+    if (!o) return 0;
+    memcpy(o, &klass, 8);
+    int32_t len = (int32_t)n;
+    memcpy(o + 0x10, &len, 4);
+    for (size_t i = 0; i < n; i++) o[0x14 + 2 * i] = (uint8_t)s[i];
+    return (uint64_t)(uintptr_t)o;
+}
+
+static int hook_default_banks(Cpu *c) {
+    (void)c;
+    if (nbanks) plat_xchg32(&banks_pending, 1);
+    return 0;
+}
+
+static int hook_load_bank(Cpu *c) {
+    if (!plat_xchg32(&banks_pending, 0) || !c->x[1]) return 0;
+    uint64_t self = c->x[0], klass = *(const uint64_t *)(uintptr_t)c->x[1];   // a game string's class
+    for (int i = 0; i < nbanks; i++) {
+        uint64_t s = il2cpp_string(klass, banks[i]);
+        if (!s) continue;
+        hook_original(c, "cobalt_load_bank", self, s, 0, 0);
+        rt_log("cobalt: sound bank %s loaded before the game's default banks", banks[i]);
+    }
+    return 0;   // then the game's own first bank
+}
+
+static void audio_init(void) {
+    Map base = {0};
+    size_t pre = strlen(AUDIO_DIR "/");
+    for (uint64_t r = 0; r < romfs_file_count(); r++) {
+        const char *name = romfs_entry(r, NULL, NULL);
+        if (strncmp(name, AUDIO_DIR "/", pre) || !ends_ci(name, ".bnk")) continue;
+        const char *leaf = strrchr(name, '/') + 1;
+        char lo[128];
+        lower_copy(lo, leaf, sizeof lo);
+        lo[strlen(lo) - 4] = 0;
+        map_put(&base, lo, "1");
+    }
+    nbanks = 0;
+    for (int i = 0; i < norder; i++) {
+        char d[2200];
+        mod_sub(order[i], AUDIO_DIR, d, sizeof d);
+        walk(d, "", bank_cb, &base);
+    }
+    map_free(&base);
+    if (!nbanks) return;
+    if (hook_install("cobalt_default_banks", hook_default_banks) && hook_install("cobalt_load_bank", hook_load_bank))
+        rt_log("cobalt: %d new sound bank(s) to load", nbanks);
+}
+
 // ======== the cache and the start
 static void digest_cb(const char *file, const char *rel, uint64_t size, void *ctx) {
     Sha256 *h = ctx;
@@ -1458,6 +1536,7 @@ void cobalt_bake(void) {
         if (ok) {
             rt_log("cobalt: %d mod(s), %d merged file(s) from the cache (%s)", norder, noutputs, cache_dir);
             register_outputs();
+            audio_init();
             return;
         }
     } else {
@@ -1477,4 +1556,5 @@ void cobalt_bake(void) {
     rt_log("cobalt: %d mod(s) merged into %d file(s) in %.1f s (%s)", norder, noutputs,
            (double)plat_now_ns() / 1e9 - t0, cache_dir);
     register_outputs();
+    audio_init();
 }

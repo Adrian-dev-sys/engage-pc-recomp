@@ -210,13 +210,16 @@ def partition(est, max_fns, max_bytes, big_fn):
 class Emitter:
     """C for the functions of one module. starts is the set of every function start of the module."""
 
-    def __init__(self, mod, starts, patched=None, reg_locals=regs.LOCALS, callee_saved=True, spins=None, continuations=False):
+    def __init__(self, mod, starts, patched=None, reg_locals=regs.LOCALS, callee_saved=True, spins=None, continuations=False,
+                 hooks=None):
         self.mod = mod
         self.continuations = continuations
         self.landing_pads = sorted(eh.landing_pads(mod)) if continuations else []
         self.starts = starts
         self.patched = patched or {}   # {address: (set index, [replacement words])} (recomp/patches.py)
         self.spins = spins or {}       # {spin wait back-edge: its head} (recomp/patches.py `spin`)
+        self.hooks = hooks or {}       # {function start: hook index} (recomp/patches.py `hook`)
+        self.uses_hooks = False
         self.reg_locals = reg_locals   # recomp/regs.py: registers per function in C locals
         self.kept = regs.CALLEE_SAVED if callee_saved else frozenset()   # not reloaded after a call
         self.uses_patches = False
@@ -386,6 +389,13 @@ class Emitter:
             if fp and fp.used:
                 out.append('    ' + fp.decl())
 
+        if entry in self.hooks:   # recomp/patches.py `hook`: the host may handle the call before the body runs
+            k = self.hooks[entry]
+            fresh = '!c->resume_pc && ' if self.continuations else ''
+            out.insert(out.index(f'    FN_ENTER({hx(entry)});') + 1,
+                       f'    if (__builtin_expect(rt_hook_on[{k}], 0) && {fresh}rt_hook_enter(c, {k})) return;')
+            self.uses_hooks = True
+
         if self.continuations and not all_labels:
             cases = ' '.join(f'case {hx(t)}: goto L_{t:x};' for t in sorted(resume))
             out += ['    uint64_t return_pc = c->x[30], return_sp = c->sp;',
@@ -495,7 +505,7 @@ class Emitter:
 def chunk_text(name, number, emitter, fns):
     """C text of one chunk. fns: [(entry, end)]."""
     body, refs = [], set()
-    emitter.uses_patches = False
+    emitter.uses_patches = emitter.uses_hooks = False
     for entry, end in fns:
         lines, r = emitter.function(entry, end)
         body.append('\n'.join(lines))
@@ -504,6 +514,8 @@ def chunk_text(name, number, emitter, fns):
     protos = ''.join(f'void {fname(r)}(Cpu *c);\n' for r in sorted(refs))
     if emitter.uses_patches:
         protos += 'extern uint8_t rt_patch_on[];\n'
+    if emitter.uses_hooks:
+        protos += 'extern uint8_t rt_hook_on[];\nint rt_hook_enter(Cpu *c, int k);\n'
     return (header(f'{name} chunk {number:04d}') + '#include "cpu.h"\n#include "simd.h"\n\n' + protos + '\n'
             + '\n\n'.join(body) + '\n')
 
@@ -559,7 +571,8 @@ def _emitter(name):
         mod = Module(name, path, base, 'c')
         e = _W['emitters'][name] = Emitter(mod, set(_W['starts'][name].tolist()),
                                            _W['patches'].for_module(name, base),
-                                           spins=_W['patches'].spins_for(name, base), **_W['opts'])
+                                           spins=_W['patches'].spins_for(name, base),
+                                           hooks=_W['patches'].hooks_for(name, base), **_W['opts'])
     return e
 
 
@@ -666,6 +679,7 @@ def main():
         mod = Module(name, path, base, 'c')
         patches.check(table, mod, name)
         starts, dstats = discover(mod)
+        patches.check_hooks(table, name, base, set((mod.lo + starts * 4).tolist()))
         est = estimate_sizes(mod, starts)
         abs_starts = mod.lo + starts * 4
         n = len(starts) if not args.limit else min(args.limit, len(starts))
