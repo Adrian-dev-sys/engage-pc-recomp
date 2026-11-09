@@ -64,10 +64,21 @@ take no time; the first one lists the game's bundle CAB names once (`profile\cob
 - `patches\xml\Support.xml`: additional supports per character group, with the experience curve `ExpType`
   (`runtime/cobalt_support.c`). The characters must also be in `Reliance.xml`.
 
-Not supported yet: custom sprites (`patches\icon`, `patches\ui`), Cobalt's own extras (its settings menu, Phoenix
-mode, smithy shortcut, rumble), `MapSetSize` / `MapSetCoords`.
+- Custom sprites (`runtime/cobalt_sprite.c`), PNG files decoded by the game's own `ImageConversion.LoadImage`:
+  `patches\icon\{skill,item,system}`, `emblem\{godring,godsymbol}` and `facethumb\{unit,emblem,bond}` go into the
+  game's icon atlases at load; `icon\face` (bond rings), `emblem\godface` and `ui\gmap\infothumb` (world map chapter
+  thumbnails) load when shown; `icon\mapstatus` adds map status icons; `icon\job\<Unit>_<Job>.png` (48x48, at most 255
+  colours) replaces unit map icons; `emblem\godsymbol\<Name>.txt` (`RRGGBB` or `RRGGBBAA`) sets an emblem's colour. A
+  file of the wrong size is skipped and logged. Every palette also gets a `<Palette>_<Palette>` unit icon, so a mod's
+  new character has one.
+
+Not supported yet: Cobalt's own extras (its settings menu, Phoenix mode, smithy shortcut, rumble), `MapSetSize` /
+`MapSetCoords`.
 Not possible: `.nro` code plugins and `.ips` code patches (logged; the mod's data still loads). They change ARM64
 code, which the recompiled game does not have at run time.
+
+Host code that holds a game object it just created keeps it on the guest stack (`roots` in `cobalt_sprite.c`) until
+the game references it, since the garbage collector scans only guest stacks.
 
 Hooks: a `hook <name> main <offset>` line in `recomp/patches-engage-v200.txt` makes that lifted function call
 `runtime/hooks.c` first (regenerate with gen.py). `tools/il2cpp_map.py --find <Class::Method>` prints a managed
