@@ -18,6 +18,7 @@
 
 #include "cobalt.h"
 #include "cobalt_lua.h"
+#include "cobalt_support.h"
 #include "cobalt_voice.h"
 #include "fs.h"
 #include "hooks.h"
@@ -922,6 +923,7 @@ static void bake_xml(void) {
             snprintf(file, sizeof file, "%s/%s", d, nm->names[k]);
             lower_copy(stem, nm->names[k], sizeof stem);
             stem[strlen(stem) - 4] = 0;
+            if (!strcmp(stem, "support")) continue;   // Cobalt's own sheet (cobalt_support.c), not a game table
             uint64_t n = 0;
             char *t = (char *)plat_file_read(file, &n);
             if (!t) continue;
@@ -1513,6 +1515,18 @@ static int lua_cb(const char *name, int kind, uint64_t size, void *ctx) {
 
 static void hooks_init(void) {
     audio_init();
+    for (int i = 0; i < norder; i++) {   // patches/xml/Support.xml, in merge order (any case of its name)
+        static const char *const names[] = {"patches/xml/Support.xml", "patches/xml/support.xml", "patches/xml/SUPPORT.xml"};
+        for (size_t k = 0; k < sizeof names / sizeof *names; k++) {
+            char path[2200];
+            mod_sub(order[i], names[k], path, sizeof path);
+            if (plat_file_exists(path)) {
+                cobalt_support_add_file(path);
+                break;
+            }
+        }
+    }
+    cobalt_support_init();
     for (int i = 0; i < norder; i++) plat_fs_list(mods_at(order[i])->romfs, lua_cb, (void *)mods_at(order[i])->romfs);
     cobalt_lua_init();
 }
