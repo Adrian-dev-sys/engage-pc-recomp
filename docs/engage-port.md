@@ -373,3 +373,9 @@ game 2.0.0. `audio-branded-final.log` completed 25 seconds with nonzero SDL play
 samples and no reported shader failures. Audio, Engage filesystem, input/system,
 configuration and runtime self-test probes pass. Full-game and long-session checks
 remain open.
+
+## Feature docs
+
+- [engage-graphics.md](engage-graphics.md): anti-aliasing, DLSS / FSR upscaling modes.
+- [engage-mods.md](engage-mods.md): mods and Cobalt mod support.
+- [engage-qol.md](engage-qol.md): PC quality of life.

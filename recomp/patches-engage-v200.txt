@@ -134,7 +134,7 @@ set lod TOTK_ENGAGE_LOD 1
 site lod main a66ec4 bd400a80 1e35d000   # ldr s0, [x20, #8] -> fmov s0, #-15.0
 
 set fullres TOTK_FULL_RES 1
-site fullres main 2011bdc 4ea81d00 1e2e1000   # mov v0.16b, v8.16b -> fmov s0, #1.0 (the scale SetRenderScale gets)
+site fullres main 2011bdc 4ea81d00 @page:x8 bd406500   # mov v0.16b, v8.16b -> ldr s0, page+0x64 (1.0, or the upscaling mode's scene scale)
 
 # Unity's Matrix4x4::SetPerspective (main+0x75983c): Engage's cameras keep their horizontal view, so a wider screen saw
 # less vertically ("zoomed in"). Wider than 16:9, cot(fov/2) is divided by aspect / (16/9): the vertical view is the

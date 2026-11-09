@@ -20,3 +20,9 @@ const char *vk_dlaa_status(void);   // the F10 overlay's anti-aliasing line
 // the viewport of the scene's draws by the frame's jitter (vk_dlaa_viewport).
 void vk_dlaa_draw(VkExec *ex);
 void vk_dlaa_viewport(VkExec *ex, VkViewport *v);
+// tex_info: in a pass larger than it, swap_img (the scene's light target, once DLSS scaled it this frame) is sampled
+// through swap_view (DLSS's output) instead
+extern const VkTexImage *vk_dlaa_swap_img;
+extern VkImageView vk_dlaa_swap_view;
+extern int vk_dlaa_trace_now;   // this frame is traced (TOTK_DLAA_TRACE)
+void vk_dlaa_tex_seen(VkExec *ex, const VkTexImage *img);   // tex_info: a sampled image (TOTK_DLAA_TRACE)
