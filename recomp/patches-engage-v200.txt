@@ -98,6 +98,12 @@ site fps60 main 250cf90 1e220100 @page:x8 bd404100   # GameTime.get_VsyncDeltaTi
 # scaled by page+0x58 = 30/fps.
 site fps60 main 29b9760 1e200940 1e200940 @page:x8 bd405901 1e210800   # tilt step: fmul s0, s10, s0; * 30/fps
 site fps60 main 29b9bf4 1e290d0b 1e290d0b @page:x9 bd405920 1e20096b   # rotation step: fcsel s11, s8, s9, eq; * 30/fps
+# Combat.CameraControllerUnitDetail.GetPositionInfo (map unit info close-up, Minus): per-frame rotation, zoom and
+# look-at steps tuned for its 30 fps (UnitInfoSequence sets VsycMode.Slow = vsync 2), scaled by page+0x58 = 30/fps.
+site fps60 main 25b5edc 1e212800 @page:x9 bd405924 1e240800 1e212800   # rotation: direction += speed * 30/fps
+site fps60 main 25b6014 1e210901 1e210901 @page:x9 bd405924 1e240821   # zoom: stick * SpeedDistance * 30/fps
+site fps60 main 25b5ec4 1e213841 @page:x9 bd405924 1e240821 1e240863 1e213841   # rotation accel/brake limits * 30/fps
+site fps60 main 25b5ff8 aa1f03e0 aa1f03e0 @page:x9 bd405924 1e240842   # emblem look-at: MoveTowards step * 30/fps
 # Resolution: Unity's 1920x1080 screen size, swapchain textures and size cap read page+0x50 (width) and +0x54
 # (height), written by runtime/resolution.c engage_res_init from output_res * render_scale. On when not 1920x1080.
 set engres TOTK_ENGAGE_RES 0
