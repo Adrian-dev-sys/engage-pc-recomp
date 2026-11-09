@@ -204,8 +204,8 @@ int vk_dlaa_available(void) { return vk_dlaa_wanted() && N.available; }
 // bloom starts at half the width (960x540 under a 1920x1080 scene), and its chain, the tonemap into the RGBA8 sRGB
 // output and the UI follow. So: a pass at the render size with one R11G11B10F/RGBA16F target and the depth arms the
 // frame; the first pass at most half as wide ends the scene and runs DLAA in place on the armed target first. Bloom,
-// tonemap and UI then work on the anti-aliased picture. Asset-sized targets (the character models, resolution.c
-// res_rt_scale) are not the render size and never arm.
+// tonemap and UI then work on the anti-aliased picture. The maps draw the scene at 90% of the render size (Unity's
+// render scale there): any scene of the render size's aspect ratio and at least half its size arms.
 // The camera: the scene's vertex shaders read Unity's view-projection from c3 (0x40 bytes, four vec4 columns). The block
 // bound to the last scene draw is copied on the GPU at the DLAA point, so it holds what the scene was drawn with.
 static struct {
@@ -620,8 +620,13 @@ void vk_dlaa_pass(VkExec *ex) {
     if (!dl_active() || D.done) return;
     unsigned rw, rh;
     res_engage_render_size(&rw, &rh);
-    if (ex->pass_ncolor == 1 && c->image && scene_color(c->format) && z->image && c->width == rw && c->height == rh &&
-        z->width == rw && z->height == rh && c->samples <= 1 && !c->is3d) {
+    // the scene: the render size's aspect ratio and at least half its size (the maps render it at 90%, 2304x1296 under
+    // 2560x1440, and the game's final pass scales it up); the character models (640x1080, 480x480) and square cameras
+    // do not match
+    int64_t cw = c->width, ch = c->height;
+    if (ex->pass_ncolor == 1 && c->image && scene_color(c->format) && z->image && cw * 2 >= rw && ch * 2 >= rh &&
+        llabs(cw * rh - ch * rw) * 100 <= (int64_t)rw * rh && z->width == c->width && z->height == c->height &&
+        c->samples <= 1 && !c->is3d) {
         if (!D.armed || c->image == D.color.image) D.color = *c, D.depth = *z, D.armed = 1;
         return;
     }
