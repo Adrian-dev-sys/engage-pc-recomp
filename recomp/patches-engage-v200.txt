@@ -254,3 +254,13 @@ hook cobalt_regist_action main 24e2430        # App.EventScript::RegistAction(2)
 hook cobalt_eventscript_load main 24e2620     # App.EventScript::LoadImpl(1): Cobalt's Lua functions after the game's
 hook cobalt_regist_function main 24e23e0    # App.EventScript::RegistFunction(2): a game function delegate as template
 hook cobalt_reliance_exp main 200f810         # App.RelianceData::TryGetExp(1): Cobalt's Support.xml (runtime/cobalt_support.c)
+hook cobalt_post_load_resource main 1eddc40   # App.MainSequence::PostLoadResource(0): Cobalt's icons into the atlases (runtime/cobalt_sprite.c)
+hook cobalt_unit_try_set main 1f82440         # App.UnitIcon::TrySet(2): patches/icon/job and the <palette>_<palette> fallback
+hook cobalt_unit_update_icon main 1f82b90     # App.UnitIcon::UpdateIcon(0): patches/icon/job
+hook cobalt_ring_face main 298ac80            # App.BondsRingFacePicture::Get(1): patches/icon/face
+hook cobalt_god_face main 232f8a0             # App.GodFacePicture::Get(1): patches/icon/emblem/godface
+hook cobalt_god_color main 2b51bf0            # App.GodColorRefineEmblem::GetColor(1): patches/icon/emblem/godsymbol/*.txt
+hook cobalt_gmap_info main 252aac0            # App.GmapMapInfoContent::SetMapInfo(1): patches/ui/gmap/infothumb
+hook cobalt_gauge_cctor main 2026630          # MapUIGauge::.cctor: patches/icon/mapstatus names
+hook cobalt_gauge_on_enable main 201f3d0      # MapUIGauge::OnEnable(0): sprites for the added names
+hook cobalt_gauge_get_sprite main 201f7d0     # MapUIGauge::GetSprite(int): any index of the longer array
