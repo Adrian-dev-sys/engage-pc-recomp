@@ -104,6 +104,11 @@ site fps60 main 25b5edc 1e212800 @page:x9 bd405924 1e240800 1e212800   # rotatio
 site fps60 main 25b6014 1e210901 1e210901 @page:x9 bd405924 1e240821   # zoom: stick * SpeedDistance * 30/fps
 site fps60 main 25b5ec4 1e213841 @page:x9 bd405924 1e240821 1e240863 1e213841   # rotation accel/brake limits * 30/fps
 site fps60 main 25b5ff8 aa1f03e0 aa1f03e0 @page:x9 bd405924 1e240842   # emblem look-at: MoveTowards step * 30/fps
+# App.RenderManager.CommitScale hands the top of the game's render-scale stack (0.9 on maps; also pushed by Somniel, the world map, events)
+# to CustomRP.Settings.SetRenderScale, its only caller; the set makes it 1.0, so the scene is drawn at the full render size.
+set fullres TOTK_FULL_RES 1
+site fullres main 2011bdc 4ea81d00 1e2e1000   # mov v0.16b, v8.16b -> fmov s0, #1.0 (the scale SetRenderScale gets)
+
 # Resolution: Unity's 1920x1080 screen size, swapchain textures and size cap read page+0x50 (width) and +0x54
 # (height), written by runtime/resolution.c engage_res_init from output_res * render_scale. On when not 1920x1080.
 set engres TOTK_ENGAGE_RES 0

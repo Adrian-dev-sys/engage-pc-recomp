@@ -636,6 +636,7 @@ static void tab_screen(float scale) {
     rows_color();
     if (rt_game_id == 1) {   // Engage: vk_dlaa.c, resolution.c res_rt_scale
         opt_group(UI_MENU_AA);
+        opt_toggle("TOTK_FULL_RES", UI_MENU_FULL_RES, UI_MENU_FULL_RES_DESC);
         opt_toggle("TOTK_DLAA", UI_MENU_DLAA, UI_MENU_DLAA_DESC);
         static const UiTextId preset[] = {UI_MENU_DLSS_PRESET_DEFAULT, UI_MENU_DLSS_PRESET_K, UI_MENU_DLSS_PRESET_J,
                                           UI_MENU_DLSS_PRESET_E};

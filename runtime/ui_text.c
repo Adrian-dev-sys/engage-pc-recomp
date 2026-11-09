@@ -71,6 +71,8 @@ static const char *const text_en[UI_TEXT_COUNT] = {
     [UI_MENU_DLSS_PRESET_DESC] = "The DLSS model DLAA uses. Default is NVIDIA's choice (K, transformer); J is the other transformer model, with a little less ghosting and a little more flicker; E is the older, cheaper CNN model.",
     [UI_MENU_DLSS_PRESET_DEFAULT] = "Default", [UI_MENU_DLSS_PRESET_K] = "K (transformer)",
     [UI_MENU_DLSS_PRESET_J] = "J (transformer)", [UI_MENU_DLSS_PRESET_E] = "E (CNN)",
+    [UI_MENU_FULL_RES] = "Full-resolution maps",
+    [UI_MENU_FULL_RES_DESC] = "The game draws some scenes below the resolution (maps at 90%) and stretches the picture; on, every scene is drawn at the full resolution. Needs a restart.",
     [UI_MENU_RT_SUPERSAMPLE] = "Character portrait supersampling",
     [UI_MENU_RT_SUPERSAMPLE_DESC] = "How much larger than the render resolution the unit info models and talk window faces are drawn; their edges get smoother as the picture is scaled down. Needs a restart.",
     [UI_MENU_ASPECT] = "Picture shape",
