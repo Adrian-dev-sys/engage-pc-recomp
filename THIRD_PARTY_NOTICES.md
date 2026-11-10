@@ -17,6 +17,15 @@ LLVM, SDL, Opus, libvpx, Zstandard, Vulkan and Ninja notices described below.
 Engage does not bundle hactool or an upstream TotK shader list. The setup's
 E monogram is original project artwork, created in code.
 
+Cobalt (https://github.com/Raytwo/Cobalt, by Raytwo and contributors; no licence published, checked 2026-11-10
+at its master branch) is the Switch mod loader whose mod format the Engage port also loads (`runtime/cobalt*.c`,
+docs/engage-mods.md). No Cobalt source is copied: its behaviour was read and written again in C against the recompiled
+game. To load mods made for Cobalt the same way, the port reproduces facts Cobalt established: its file layout and
+markers (patches/xml, patches/msbt, patches/icon, "CobaltEvent:", "Mod!Fallback"), the Lua function names, the hooked
+game functions, the AssetTable and skill-table capacities and their instruction words (`recomp/patches-engage-v200.txt`,
+set cobalt, as in Cobalt's src/lib.rs), and the four default unit icons that are not NoWeapon
+(`runtime/cobalt_sprite.c`, as in its sprite.rs). Cobalt's tuned vibration values are not used.
+
 Code copied or adapted from another project is listed here with its source, the exact commit, its license, and the files it went into. Each copied file keeps its original copyright header.
 
 | Component | Source and commit | License | Used in |

@@ -91,39 +91,39 @@ static int fade_in_hud(Cpu *c) {   // Combat.CombatWorld.FadeInHUD(this)
     return !cfg_int("TOTK_COBALT_COMBAT_UI");
 }
 
-// ---- ring polish rumble, through the game's own vibration (Pad.Vibration().OneShot)
+// ---- ring polish rumble, through the game's own vibration (Pad.Vibration().OneShot). Same events as Cobalt's
+// ringvibration.rs; the strengths and lengths are our own.
 
 static void vibrate(Cpu *c, float time, float magnitude, float amp_low, float amp_high) {
     if (!cfg_int("TOTK_COBALT_RING_RUMBLE")) return;
     uint64_t vm = guest_call(c, G(PAD_VIBRATION), 0, 0, 0, 0);
     if (!vm) return;
     set_f(c, 0, time), set_f(c, 1, magnitude), set_f(c, 2, amp_low), set_f(c, 3, amp_high);
-    set_f(c, 4, 160.f), set_f(c, 5, 300.f);
+    set_f(c, 4, 160.f), set_f(c, 5, 320.f);   // the Switch's neutral low and high band frequencies
     guest_call(c, G(ONE_SHOT), vm, 0, 0, 0);
 }
 
 static int clean_ring(Cpu *c) {   // RingCleaningSequence.CleanRing(this, strength, hitResult): a spot polished
     int strong = (int)c->x[1] == 0, hit = (int)c->x[2];   // Strength: Strong 0, Weak 1; HitResult: NotHit, Near, Hit
     hook_original(c, "cobalt_clean_ring", c->x[0], c->x[1], c->x[2], c->x[3]);
-    static const float t[2][3][4] = {
-        {{0.25f, 0.25f, 0.2f, 0.5f}, {0.15f, 0.25f, 0.3f, 0.7f}, {0.15f, 0.35f, 1.0f, 1.0f}},    // weak
-        {{0.35f, 0.25f, 0.2f, 0.5f}, {0.25f, 0.75f, 0.3f, 0.7f}, {0.35f, 1.0f, 0.4f, 0.8f}},     // strong
-    };
-    if (hit >= 0 && hit <= 2) vibrate(c, t[strong][hit][0], t[strong][hit][1], t[strong][hit][2], t[strong][hit][3]);
+    if (hit < 0 || hit > 2) return 1;
+    // our own tuning: a better hit is stronger and longer, a strong polish 1.6x; the light motor leads
+    float a = (0.12f + 0.18f * (float)hit) * (strong ? 1.6f : 1.f);
+    vibrate(c, 0.08f + 0.06f * (float)hit, 1.f, a * 0.6f, a > 1 ? 1 : a);
     return 1;
 }
 
 static int rub_effect(Cpu *c) {   // RingCleaning.EffectController.PlayRubEffect() static: R held, stick turning
     c->x[0] = hook_original(c, "cobalt_rub_effect", c->x[0], 0, 0, 0);
     uint64_t r = c->x[0];
-    vibrate(c, 0.15f, 0.15f, 0.05f, 0.15f);
+    vibrate(c, 0.1f, 1.f, 0.03f, 0.07f);   // a faint buzz while rubbing
     c->x[0] = r;
     return 1;
 }
 
 static int cleaning_start(Cpu *c) {   // RingCleaningClothAnimationEvent.CleaningStartEvent(this): A pressed
     hook_original(c, "cobalt_cleaning_start", c->x[0], c->x[1], 0, 0);
-    vibrate(c, 0.12f, 0.10f, 0.05f, 0.10f);
+    vibrate(c, 0.06f, 1.f, 0.04f, 0.08f);   // a short tick
     return 1;
 }
 
