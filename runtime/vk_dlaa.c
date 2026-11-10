@@ -550,10 +550,13 @@ static void evaluate(VkExec *ex, int up) {
         uint64_t now = plat_now_ns();
         double dt = D.last_eval_ns ? (now - D.last_eval_ns) / 1e6 : 0;
         D.last_eval_ns = now;
-        VkFfxImage fc = {t->image, t->format, w, h, 0}, fz = {z->image, z->format, w, h, 0},
-                   fm = {e->mv, VK_FORMAT_R16G16_SFLOAT, w, h, 1}, fo = {e->out, VK_FORMAT_R16G16B16A16_SFLOAT, ow, oh, 1};
+        const VkFfxImage scene = {.image = t->image, .format = t->format, .width = w, .height = h};
+        const VkFfxImage zbuf = {.image = z->image, .format = z->format, .width = w, .height = h};
+        const VkFfxImage vecs = {.image = e->mv, .format = VK_FORMAT_R16G16_SFLOAT, .width = w, .height = h};
+        const VkFfxImage dst = {.image = e->out, .format = VK_FORMAT_R16G16B16A16_SFLOAT, .width = ow, .height = oh, .storage = 1};
+        float frame_ms = dt > 0 && dt < 100 ? (float)dt : 16.67f;
         dl_phase = PH_EVAL;
-        int ok = vk_ffx_upscale(cb, &fc, &fz, &fm, &fo, jx, jy, D.reset, dt > 0 && dt < 100 ? (float)dt : 16.67f, 0);
+        int ok = vk_ffx_upscale(cb, &scene, &zbuf, &vecs, &dst, jx, jy, D.reset, frame_ms, 0);
         dl_phase = PH_NONE;
         if (!ok) return dl_fail("FSR 3.1 upscaling", 0);
         goto dispatched;
