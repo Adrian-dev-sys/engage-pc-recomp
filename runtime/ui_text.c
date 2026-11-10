@@ -68,7 +68,7 @@ static const char *const text_en[UI_TEXT_COUNT] = {
     [UI_MENU_COBALT_RING] = "Ring polish rumble",
     [UI_MENU_COBALT_RING_DESC] = "The controller rumbles while you polish a bond ring.",
     [UI_MENU_COBALT_OUTFIT] = "Outfits in supports",
-    [UI_MENU_COBALT_OUTFIT_DESC] = "Characters keep the outfit they wear in support conversations and other scenes "
+    [UI_MENU_COBALT_OUTFIT_DESC] = "Characters keep the outfit they wear in support conversations, ring polishing and other scenes "
                                    "that would switch them to their default attire.",
     [UI_MENU_COBALT_MODE] = "Game mode",
     [UI_MENU_COBALT_MODE_DESC] = "The loaded save's mode. Classic: fallen units are lost. Casual: they return after the "

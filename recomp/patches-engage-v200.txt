@@ -302,3 +302,12 @@ hook cobalt_demo_outfit main 1bb5f60         # App.AssetTable.Result::GetForDemo
 set shadowres TOTK_SHADOW_RES_PATCH 0
 site shadowres main 2cadac0 1ac82928 1ac82928 @page:x9 b9406929 1ac92108   # width: asr w8, w9, w8; lsl w8, w8, page+0x68
 site shadowres main 2cadb50 1ac82928 1ac82928 @page:x9 b9406929 1ac92108   # height
+
+# Outfits in ring polishing (TOTK_COBALT_SUPPORT_OUTFIT, runtime/cobalt_extras.c cobalt_outfit_live): FaceImagesController
+# .Start copies the unit and clears its four accessory slots before CreateForRingCleaning; skipping the clears keeps the
+# outfit the character wears.
+set ringoutfit TOTK_RING_OUTFIT_PATCH 0
+site ringoutfit main 2d50bbc 97c842b5 d503201f   # bl UnitAccessory.Clear -> nop
+site ringoutfit main 2d50be0 97c842ac d503201f
+site ringoutfit main 2d50bfc 97c842a5 d503201f
+site ringoutfit main 2d50c18 97c8429e d503201f
