@@ -262,10 +262,10 @@ static void xlate_identity(void) {
         strcat(p, ".id");
         uint64_t size = 0;
         char *f = (char *)read_file(p, &size);
-        how = "totk_xlate.id";
+        how = "the .id file beside the translator";
         if (!f || !hex32(f, xlate_id)) {
             uint8_t *exe = read_file(xlate_exe, &size);
-            how = exe ? "sha256 of the exe; tools/build_xlate.py writes totk_xlate.id" : "none: no translator";
+            how = exe ? "sha256 of the exe; tools/build_xlate.py writes the .id file" : "none: no translator";
             if (exe) rt_sha256(exe, (size_t)size, xlate_id);
             free(exe);
         }
@@ -296,8 +296,11 @@ static void init_paths(void *param) {
         }
     }
     const char *xlate_cfg = cfg_get("TOTK_XLATE"), *cache_cfg = cfg_get("TOTK_SHADER_CACHE");
-    char beside[PATH_CAP + 32];   // a packaged folder (tools/package_build.py) keeps the translator next to totk.exe
-    if (exe_dir[0]) snprintf(beside, sizeof beside, "%s/totk_xlate" PLAT_EXE_SUFFIX, exe_dir);
+    char beside[PATH_CAP + 32];   // a packaged folder keeps the translator next to the exe (Engage: engage_xlate.exe)
+    if (exe_dir[0]) {
+        snprintf(beside, sizeof beside, "%s/%s_xlate" PLAT_EXE_SUFFIX, exe_dir, RT_ENGAGE ? "engage" : "totk");
+        if (RT_ENGAGE && !file_exists(beside)) snprintf(beside, sizeof beside, "%s/totk_xlate" PLAT_EXE_SUFFIX, exe_dir);
+    }
     if (xlate_cfg && *xlate_cfg && strlen(xlate_cfg) < sizeof xlate_exe) strcpy(xlate_exe, xlate_cfg);
     else if (exe_dir[0] && file_exists(beside)) strcpy(xlate_exe, beside);
     else if (root[0]) snprintf(xlate_exe, sizeof xlate_exe, "%s/build/xlate/totk_xlate" PLAT_EXE_SUFFIX, root);

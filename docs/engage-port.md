@@ -363,7 +363,9 @@ The Windows icon is generated in the ignored build directory from the user's ext
 resulting icon is tracked. The Engage build emits its own resource file and retains
 the existing UTF-8 and DPI manifest. Settings and rotating logs use `engage.ini` and
 `engage.log`; the build preserves an existing `totk.ini` by copying it to `engage.ini`
-only when the latter does not exist. The existing Run-Engage.cmd launcher still applies.
+only when the latter does not exist. The shader translator sits beside the exe as
+`engage_xlate.exe` (+ `.id`) and the linker map is `engage.map`; the runtime still finds an
+older `totk_xlate.exe` there. The existing Run-Engage.cmd launcher still applies.
 Shared TotK engine source names and environment-variable interfaces remain compatible.
 
 

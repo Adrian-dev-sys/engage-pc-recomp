@@ -67,6 +67,7 @@ END
     if old_ini.exists() and not new_ini.exists():
         shutil.copy2(old_ini, new_ini)
     build_game.EXE = 'engage.exe'
+    build_game.LINK_FLAGS = [f.replace('totk.map', 'engage.map') for f in build_game.LINK_FLAGS]
     sys.argv = ['build_game.py', '--version', 'engage-v200', '--expected', str(expected),
                 '--exefs', str(extracted / 'ExeFS'), '--romfs', str(extracted / 'packed-romfs'),
                 '--profile', str(ROOT / 'build' / 'profile-engage'),
@@ -76,10 +77,12 @@ END
     build_game.main()
     output = Path(sys.argv[sys.argv.index('--out') + 1]) if '--out' in sys.argv else ROOT / 'build' / 'engage-v200'
     if '--compile-only' not in sys.argv:
-        for name in ('totk_xlate.exe', 'totk_xlate.id'):
+        for name in ('totk_xlate.exe', 'totk_xlate.id'):   # kept beside engage.exe as engage_xlate.*
             source = extra.translator / name
             if source.is_file():
-                shutil.copy2(source, output / name)
+                shutil.copy2(source, output / name.replace('totk', 'engage'))
+                (output / name).unlink(missing_ok=True)
+        (output / 'totk.map').unlink(missing_ok=True)
 
 
 if __name__ == '__main__':

@@ -7,6 +7,7 @@
 const char *cfg_get(const char *name);
 
 // Reads totk.ini once, from mem_init after the address space is claimed and before any setting is read. Logs the file, its key count, unknown keys and environment overrides.
+const char *cfg_ini_name(void);   // engage.ini or totk.ini
 void cfg_init(void);
 
 // Replaces the loaded keys with those of the file at path (tests). 1 when the file was read, 0 when missing.

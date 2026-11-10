@@ -251,7 +251,7 @@ int opt_save_tick(int force) {
     g_save_at = 0;
     if (!cfg_save() && !g_save_logged) {
         g_save_logged = true;
-        rt_log("menu: could not write totk.ini; the changed settings hold for this session");
+        rt_log("menu: could not write %s; the changed settings hold for this session", cfg_ini_name());
     }
     return 0;
 }
