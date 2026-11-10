@@ -236,6 +236,7 @@ static void window_settings_live(void) {
     seen = v;
     res_fov_live();
     res_shadow_live();
+    cobalt_outfit_live();
     const char *e = cfg_value("TOTK_VK_PRESENT");
     if (!started || strncmp(e, present, sizeof present - 1)) {
         snprintf(present, sizeof present, "%s", e);

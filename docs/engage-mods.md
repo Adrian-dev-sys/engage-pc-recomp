@@ -81,7 +81,7 @@ take no time; the first one lists the game's bundle CAB names once (`profile\cob
 - Cobalt's settings (`runtime/cobalt_extras.c`) are in F1 > Mods > Cobalt instead of its in-game page, saved in
   `engage.ini` `[mods]`: combat damage numbers (`cobalt_combat_popups`), combat interface (`cobalt_combat_ui`), ring
   polish rumble (`cobalt_ring_rumble`), outfits in supports (`cobalt_support_outfit`: scenes that ask for a
-  character's default outfit get the worn one) and the loaded save's game mode (Casual, Classic, Phoenix; saved with
+  character's default outfit get the worn one; ring polishing, which strips accessories, keeps them) and the loaded save's game mode (Casual, Classic, Phoenix; saved with
   the game). A Phoenix save is labelled in the save list.
 
 Not supported: Cobalt's combat rumble (its tuned event table has no licence to reuse), the Smithy and Skill

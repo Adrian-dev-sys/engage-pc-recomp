@@ -135,6 +135,18 @@ static int demo_outfit(Cpu *c) {
     return 0;
 }
 
+// Ring polishing clears the unit's accessories before building its model (patch set ringoutfit); the same switch skips
+// that. Called on every settings change (gfx_present.c window_settings_live).
+void cobalt_outfit_live(void) {
+    if (!RT_ENGAGE) return;
+    static int set = -2, shown = -1;
+    if (set == -2) set = rt_patch_set("ringoutfit");
+    int on = cfg_int("TOTK_COBALT_SUPPORT_OUTFIT") != 0;
+    if (set < 0 || on == shown) return;
+    rt_patch_switch(set, on);
+    shown = on;
+}
+
 // ---- save list: a Phoenix save says so (SaveDataMenu.MenuItemContent.SetupByMenuItem(this, item))
 
 static int save_item(Cpu *c) {
