@@ -9,6 +9,26 @@ Experimental native Windows x86-64 recompilation of **Fire Emblem Engage 2.0.0**
 
 [Download Windows Setup](https://github.com/veneito/engage-pc-recomp/releases/download/engage-v0.1.0-alpha.2/Engage-Setup-0.1.0-alpha.2-windows.zip) · [Installation guide](docs/installing-engage.md) · [Report a bug](https://github.com/veneito/engage-pc-recomp/issues/new/choose) · [Build from source](docs/building-engage.md)
 
+## About this fork
+
+This is a personal fork of [Engage PC Recomp](https://github.com/xgc1986/engage-pc-recomp). It has no releases of
+its own: build it from source as described below. Most of its changes were written with an AI assistant (Claude) and
+tested by hand on one Windows PC with an NVIDIA GPU. Its additions include:
+
+- DLSS anti-aliasing and upscaling modes (Quality to Ultra Performance), with AMD FSR 3.1 as the fallback.
+- Shadow resolution, render-target upscaling of menu models, ultrawide fixes (Wyvern Ride reticle and more).
+- Game speed fixes above 30 fps (cameras, animations), a larger memory pool for heavy mods.
+- Loading of mods made for [Cobalt](https://github.com/Raytwo/Cobalt): outfits, XML and text patches, sound banks,
+  voices, Lua scripts, supports and custom sprites.
+
+The DLSS and FSR libraries are not included. Put NVIDIA's `nvngx_dlss.dll` (from the
+[DLSS SDK](https://github.com/NVIDIA/DLSS)) and AMD's `amd_fidelityfx_vk.dll` (from the
+[FidelityFX SDK](https://github.com/GPUOpen-LibrariesAndSDKs/FidelityFX-SDK)) next to `engage.exe` to use them.
+
+Credits: the Engage PC Recomp authors; Valiantsin Dzerakh and the TotK Recomp contributors; Raytwo and the Cobalt
+contributors, whose mod format this fork loads (written anew, no Cobalt code included); AMD for the FidelityFX API
+headers (MIT); and every project listed in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+
 ## Game files stay on your computer
 
 This repository contains the port's source and tools, not the game. Supply your own base game, update 2.0.0, keys and supported DLC dumps. Build locally. Do not upload game containers, keys, firmware, generated game code, a built `engage.exe`, extracted icons, shader caches or save files to this repository or its issues. A locally compiled game executable contains game code and is not a redistributable release asset.
