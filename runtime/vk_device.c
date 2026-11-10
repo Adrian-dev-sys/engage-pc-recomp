@@ -68,7 +68,7 @@ static int create_instance(void) {
     if (validate) ext[n_ext++] = VK_EXT_DEBUG_UTILS_EXTENSION_NAME;
     vk_dlaa_instance_exts(ext, &n_ext, 20);
     VkApplicationInfo app = {.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO, .pApplicationName = RT_ENGAGE ? "Engage PC Recomp" : "TotK Recomp",
-                             .pEngineName = "TotK Recomp", .apiVersion = VK_API_VERSION_1_3};
+                             .pEngineName = RT_ENGAGE ? "Engage PC Recomp" : "TotK Recomp", .apiVersion = VK_API_VERSION_1_3};
     VkInstanceCreateInfo ci = {.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO, .pApplicationInfo = &app,
                                .enabledExtensionCount = n_ext, .ppEnabledExtensionNames = ext,
                                .enabledLayerCount = validate ? 1 : 0, .ppEnabledLayerNames = layers};

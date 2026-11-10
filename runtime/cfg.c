@@ -180,7 +180,7 @@ static void add(char *key, char *value, int line) {
     size_t vl = strlen(value);
     if (vl >= 2 && value[0] == '"' && value[vl - 1] == '"') value[vl - 1] = 0, value++;
     if (!*key) return;
-    if (!is_known(key)) rt_log("cfg: %s line %d: unknown key '%s'", RT_ENGAGE ? "engage.ini" : "totk.ini", line, key);
+    if (!is_known(key)) rt_log("cfg: %s line %d: unknown key '%s'", cfg_ini_name(), line, key);
     if (!*value) return;   // "key =" leaves the setting at its default
     for (int i = 0; i < n_entries; i++)
         if (!strcmp(entries[i].key, key)) {   // a repeated key: the later line wins
@@ -205,7 +205,7 @@ int cfg_load(const char *path) {
         char *s = trim(p);
         char *eq = strchr(s, '=');
         if (*s && *s != '#' && *s != ';' && *s != '[') {
-            if (!eq) rt_log("cfg: %s line %d: no '=' in '%s'", RT_ENGAGE ? "engage.ini" : "totk.ini", line, s);
+            if (!eq) rt_log("cfg: %s line %d: no '=' in '%s'", cfg_ini_name(), line, s);
             else {
                 *eq = 0;
                 add(trim(s), trim(eq + 1), line);
@@ -472,7 +472,7 @@ static void put(Out *o, const char *s, size_t n) {
     if (o->n + n + 1 > o->cap) {
         o->cap = (o->n + n + 1) * 2;
         o->buf = realloc(o->buf, o->cap);
-        if (!o->buf) rt_fatal("cfg: out of memory writing totk.ini");
+        if (!o->buf) rt_fatal("cfg: out of memory writing %s", cfg_ini_name());
     }
     memcpy(o->buf + o->n, s, n);
     o->n += n;
@@ -520,7 +520,7 @@ int cfg_save_to(const char *path) {
     // after[i]: entries to write after line i (-1 = none); replace[i]: the entry whose value line i now carries
     int *replace = malloc(sizeof(int) * ((size_t)nl + 1)), *after_key = malloc(sizeof(int) * (size_t)(n + 1));
     char *drop = calloc((size_t)nl + 1, 1);   // lines of a reset key
-    if (!lines || !replace || !after_key || !drop) rt_fatal("cfg: out of memory writing totk.ini");
+    if (!lines || !replace || !after_key || !drop) rt_fatal("cfg: out of memory writing %s", cfg_ini_name());
     for (int i = 0, at = 0; i < nl; i++) {
         size_t start = (size_t)at;
         while ((uint64_t)at < size && text[at] != '\n') at++;
@@ -634,7 +634,7 @@ static int find_ini(void) {
     char *cut = plat_last_sep(path);
     if (!cut) cut = strrchr(path, '/');
     if (!cut || cut + 10 >= path + sizeof path) return 0;
-    strcpy(cut + 1, RT_ENGAGE ? "engage.ini" : "totk.ini");
+    strcpy(cut + 1, cfg_ini_name());
     snprintf(ini_path, sizeof ini_path, "%s", path);
     return 1;
 }
@@ -655,13 +655,16 @@ static void load_ini(void) {
     for (int i = 0; i < n_entries; i++) {
         char var[128];
         snprintf(var, sizeof var, PREFIX "%s", entries[i].key);
-        if (getenv(var)) rt_log("cfg: %s is set in the environment and overrides totk.ini", var);
+        if (getenv(var)) rt_log("cfg: %s is set in the environment and overrides %s", var, cfg_ini_name());
     }
 }
+
+// The settings file's name: engage.ini for Engage, totk.ini for TotK.
+const char *cfg_ini_name(void) { return RT_ENGAGE ? "engage.ini" : "totk.ini"; }
 
 void cfg_init(void) {
     load_ini();
     if (profile_of())
-        rt_log("cfg: device profile Steam Deck: defaults for the keys totk.ini does not set (TOTK_DEVICE_PROFILE=desktop "
-               "turns it off)");
+        rt_log("cfg: device profile Steam Deck: defaults for the keys %s does not set (TOTK_DEVICE_PROFILE=desktop "
+               "turns it off)", cfg_ini_name());
 }
