@@ -311,3 +311,6 @@ site ringoutfit main 2d50bbc 97c842b5 d503201f   # bl UnitAccessory.Clear -> nop
 site ringoutfit main 2d50be0 97c842ac d503201f
 site ringoutfit main 2d50bfc 97c842a5 d503201f
 site ringoutfit main 2d50c18 97c8429e d503201f
+
+# Wyvern Ride's reticle on a screen wider than 16:9 (runtime/engage_ui.c): centred on its canvas after setup.
+hook uw_ride_camera_init main 1cfdad0   # App.DragonRideCamera::InitializeCameraBase(0)

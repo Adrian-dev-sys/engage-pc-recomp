@@ -1545,6 +1545,7 @@ static void register_outputs(void) {
 
 void cobalt_bake(void) {
     cobalt_extras_init();   // its switches apply with or without Cobalt mods
+    engage_ui_init();
     norder = 0;
     for (int k = mods_count() - 1; k >= 0 && norder < MAX_COBALT; k--) {
         const ModInfo *m = mods_at(k);
