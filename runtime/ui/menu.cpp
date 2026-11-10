@@ -657,6 +657,8 @@ static void tab_screen(float scale) {
         opt_group(UI_MENU_AA);
         opt_toggle("TOTK_FULL_RES", UI_MENU_FULL_RES, UI_MENU_FULL_RES_DESC);
         opt_toggle("TOTK_ENGAGE_LOD", UI_MENU_LOD, UI_MENU_LOD_DESC);
+        static const UiTextId shadow[] = {UI_MENU_SHADOW_RES_1, UI_MENU_SHADOW_RES_2, UI_MENU_SHADOW_RES_4};
+        opt_choice("TOTK_SHADOW_RES", UI_MENU_SHADOW_RES, shadow, 3, UI_MENU_SHADOW_RES_DESC);
         opt_toggle("TOTK_DLAA", UI_MENU_DLAA, UI_MENU_DLAA_DESC);
         static const UiTextId modes[] = {UI_MENU_UPSCALE_NATIVE, UI_MENU_UPSCALE_QUALITY, UI_MENU_UPSCALE_BALANCED,
                                          UI_MENU_UPSCALE_PERFORMANCE, UI_MENU_UPSCALE_ULTRA};

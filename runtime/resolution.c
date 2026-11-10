@@ -393,6 +393,22 @@ int res_wants_wide_overlay(const unsigned out[2]) {
 // window_settings_live), the first time at the first present.
 #define FOV_MIN 70
 #define FOV_MAX 140
+// Engage: TOTK_SHADOW_RES (1, 2, 4; live) multiplies the shadow map size (set shadowres, patch page +0x68), so cast
+// shadows keep their edge up close at high render sizes. The map lives in the application pool (8192x8192 D16 is 128
+// MiB per map).
+void res_shadow_live(void) {
+    if (!RT_ENGAGE || !rt_patch_page()) return;
+    static int set = -2, shown = -1;
+    if (set == -2) set = rt_patch_set("shadowres");
+    if (set < 0) return;
+    int k = cfg_int("TOTK_SHADOW_RES"), shift = k >= 4 ? 2 : k >= 2 ? 1 : 0;
+    if (shift == shown) return;
+    *(volatile uint32_t *)((uint8_t *)rt_patch_page() + 0x68) = (uint32_t)shift;
+    rt_patch_switch(set, shift > 0);
+    if (shown >= 0 || shift) rt_log("resolution: shadow maps at %dx the game's size", 1 << shift);
+    shown = shift;
+}
+
 void res_fov_live(void) {
     static int set = -2, shown = 100;
     if (set == -2) set = rt_patch_set("fov");
