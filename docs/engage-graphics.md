@@ -32,3 +32,12 @@ no visible difference). FSR shows more grain on camera movement than DLSS; sharp
 
 Test knobs: `TOTK_DLAA_TRACE=n` logs n frames' passes after the scene and the images they sample;
 `TOTK_DLAA_MVDEBUG=1`, `TOTK_DLAA_MV=0`, `TOTK_DLAA_JITTER=0`, `TOTK_DLAA_FLIPY=1`.
+
+## Shadow resolution
+
+`shadow_res` (F1 > Screen, live): 1 (the game's 2048), 2, 4. URP's `InitializeShadowData` sets the main light's shadow
+map width and height to the pipeline asset's 2048 >> a quality shift (`CalcMainLightShadowmapResolution`, inlined
+twice); patch set `shadowres` shifts both left by patch page +0x68 (`resolution.c` `res_shadow_live`). The main light
+map holds two cascades (2048x1024 at the game's size) for the world and the characters alike; Engage's own
+`CustomShadowCasterPass` map (2048x2048) follows the same size. Characters cast from low-poly `ShadowMesh` /
+`ShadowMesh_Hair` meshes (their skin, face and hair shaders have no shadow pass), so their facets show at 2x and 4x.
