@@ -84,7 +84,8 @@ take no time; the first one lists the game's bundle CAB names once (`profile\cob
   character's default outfit get the worn one; ring polishing, which strips accessories, keeps them) and the loaded save's game mode (Casual, Classic, Phoenix; saved with
   the game). A Phoenix save is labelled in the save list.
 
-Not supported: Cobalt's combat rumble (its tuned event table has no licence to reuse), the Smithy and Skill
+Ring polish rumble uses the same moments as Cobalt's with our own strengths. Not supported: Cobalt's combat rumble
+(its tuned event table has no licence to reuse), the Smithy and Skill
 Inheritance shortcuts in the sortie menu, overclock, and its render scale and LOD settings (Screen has ours).
 Not possible: `.nro` code plugins and `.ips` code patches (logged; the mod's data still loads). They change ARM64
 code, which the recompiled game does not have at run time.
