@@ -1,6 +1,6 @@
 # Installing Engage PC Recomp
 
-Windows setup is available as an [experimental prerelease](https://github.com/veneito/engage-pc-recomp/releases/tag/engage-v0.1.0-alpha.2). The setup pipeline passed a local installation test on a second drive; clean-machine and full-game testing remain outstanding. Use the Engage setup package below.
+This fork has no releases, so there is no setup ZIP to download. After the toolchain steps of [the build guide](building-engage.md), start the same setup form from the repository with `.venv-py314\Scripts\python.exe -m engage_setup`, or build a setup package yourself with `tools/make_engage_release.py` ([release notes](releasing-engage.md)). The steps below describe that form.
 
 ## What you need
 
@@ -15,18 +15,18 @@ Windows setup is available as an [experimental prerelease](https://github.com/ve
 | Firmware | Your extracted firmware folder containing NCA files, for the shared fonts |
 | Optional DLC | Expansion Pass and/or Order of Heroes Item Set, as separate NSPs |
 
-Setup includes Python, the compiler and a self-contained extractor. You do not need to install Python, Visual Studio or .NET separately. Game files, keys and firmware are supplied by you and stay on your computer.
+Run from the repository, setup uses the Python, compiler and extractor the build guide sets up. Game files, keys and firmware are supplied by you and stay on your computer.
 
 ## Install
 
 ![Engage Setup with required files grouped above the optional DLC and title-key inputs](screenshots/setup.png)
 
-1. Download the [Engage-Setup Windows ZIP](https://github.com/veneito/engage-pc-recomp/releases/download/engage-v0.1.0-alpha.2/Engage-Setup-0.1.0-alpha.2-windows.zip). Extract the entire ZIP; keep its folders together. The [release page](https://github.com/veneito/engage-pc-recomp/releases/tag/engage-v0.1.0-alpha.2) includes SHA-256 checksums.
-2. Open **Engage-Setup.exe**. Choose your base game, update **2.0.0**, `prod.keys` and extracted firmware folder. Add either DLC and `title.keys` if needed.
+1. Start the setup form as described above.
+2. Choose your base game, update **2.0.0**, `prod.keys` and extracted firmware folder. Add either DLC and `title.keys` if needed.
 3. Choose a separate, empty installation folder, such as `D:\Games\Engage`. Select **Install Engage**. Setup checks your hardware, verifies and extracts the game, recompiles it locally, and installs it. Allow 20–60 minutes initially; time varies by CPU and storage.
 4. Select **Play Engage**. Later, open **Play Engage.cmd** in your installation folder. Press **F1** for settings and controls.
 
-Your original dumps are unchanged. The installed executable contains locally generated game code: keep the installation private. The installed game icon and fonts come from your inputs, rather than from the downloadable setup.
+Your original dumps are unchanged. The installed executable contains locally generated game code: keep the installation private. The installed game icon and fonts come from your inputs, not from this repository.
 
 ## If setup stops
 
