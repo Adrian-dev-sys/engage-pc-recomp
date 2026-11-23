@@ -198,6 +198,11 @@ static const char *const text_en[UI_TEXT_COUNT] = {
                                   "keyboard stays quiet until the window is in front again. Off, it pauses when its "
                                   "window loses focus, as on the Switch when Home is pressed; a load interrupted that "
                                   "way can stop for good.",
+    [UI_MENU_FAKE_ONLINE] = "Fake online features (experimental)",
+    [UI_MENU_FAKE_ONLINE_DESC] = "Plays as if online, with made-up local data instead of a server. For now: the glowing "
+                                 "bonus spots on chapter maps where other players scored kills or lost units (step on "
+                                 "them for items and bonuses), and the chapter rankings of the units and Emblems players used most (world "
+                                 "map menu > Ranking). Spots apply to the next chapter map you start. Off by default.",
 
     [UI_MENU_VOLUME] = "Volume", [UI_MENU_VOLUME_DESC] = "Master volume of the game.",
 

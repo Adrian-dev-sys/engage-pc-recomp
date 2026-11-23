@@ -16,6 +16,8 @@ assistant (Claude) and tested by hand on one Windows PC with an NVIDIA GPU. Its 
 - Loading of mods made for [Cobalt](https://github.com/Raytwo/Cobalt): outfits, XML and text patches, sound banks,
   voices, Lua scripts, supports and custom sprites.
 - DualSense rumble and gyro aiming.
+- Fake online (off by default, no server): Spirits of the Fallen spots on chapter maps and the chapter rankings,
+  from made-up local data.
 
 The DLSS and FSR libraries are not included. Put NVIDIA's `nvngx_dlss.dll` (from the
 [DLSS SDK](https://github.com/NVIDIA/DLSS)) and AMD's `amd_fidelityfx_vk.dll` (from the

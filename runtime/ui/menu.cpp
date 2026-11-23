@@ -757,6 +757,7 @@ static void tab_game(float scale) {
     static const UiTextId mode[] = {UI_MENU_MODE_DOCKED, UI_MENU_MODE_HANDHELD};
     opt_choice("TOTK_OPERATION_MODE", UI_MENU_OPERATION_MODE, mode, 2, UI_MENU_OPERATION_MODE_DESC);
     opt_toggle("TOTK_ASSUME_FOCUS", UI_MENU_ASSUME_FOCUS, UI_MENU_ASSUME_FOCUS_DESC);
+    if (rt_game_id == 1) opt_toggle("TOTK_FAKE_ONLINE", UI_MENU_FAKE_ONLINE, UI_MENU_FAKE_ONLINE_DESC);
     if (rt_game_id == 1)
         opt_slider("TOTK_FAST_FORWARD", UI_MENU_FAST_FORWARD, 2, 4, UI_MENU_FAST_FORWARD_DESC, 1, "%.0fx");
     opt_end();

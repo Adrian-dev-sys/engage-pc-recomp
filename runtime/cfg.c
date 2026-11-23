@@ -36,7 +36,7 @@ static const char *const known[] = {
     "BIND_PLUS", "BIND_R", "BIND_RCLICK", "BIND_RIGHT", "BIND_RSTICK_DOWN", "BIND_RSTICK_LEFT", "BIND_RSTICK_RIGHT", "BIND_RSTICK_UP",
     "BIND_SKIP", "BIND_STATS", "BIND_UP", "BIND_X", "BIND_Y",
     "BIND_ZL", "BIND_ZR", "BLOCK_VIEWS_3D", "CLOTH_REALTIME", "COBALT_COMBAT_POPUPS", "COBALT_COMBAT_UI", "COBALT_RING_RUMBLE", "COBALT_SUPPORT_OUTFIT", "COLOR_BRIGHTNESS", "COLOR_CONTRAST", "COLOR_GAMMA", "COLOR_PRESET", "COLOR_SATURATION", "CORE_DIAG", "CRIT", "CRIT_OUT", "DESC_TEMPLATE", "DEVICE_PROFILE", "DLAA", "DLAA_FLIPY", "DLAA_JITTER", "DLAA_MV", "DLAA_MVDEBUG", "DLAA_TRACE", "FSR_DEPTH_INVERTED", "RING_OUTFIT_PATCH", "DLSS_PRESET", "DUMP", "DUMP_BUF", "DUMP_DIR", "DUMP_LOG", "ENGAGE_LOD",
-    "EXEFS", "FAST_FORWARD", "FEEDBACK", "FIX_C0", "FIX_ZERO", "FLIGHT", "FLIGHT_AT", "FLIGHT_DIR", "FLIGHT_FRAMES", "FLIGHT_SPIKE_MS",
+    "EXEFS", "FAKE_ONLINE", "FAST_FORWARD", "FEEDBACK", "FIX_C0", "FIX_ZERO", "FLIGHT", "FLIGHT_AT", "FLIGHT_DIR", "FLIGHT_FRAMES", "FLIGHT_SPIKE_MS",
     "FLIGHT_THUMBS", "FOV", "FOV_PATCH", "FPS60", "FPS_LIMIT", "FREEZE_IDLE", "FREE_CORES", "FULLSCREEN", "FULL_RES", "GPL", "GPL_DRAW_BUILD", "GPU",
     "GPU_INDEX", "GPU_NAME", "HIGHFPS_FIX", "INPUT", "INPUT_RECORD", "INPUT_SCRIPT", "LANG", "LIB_PREBUILD",
     "LIB_PREBUILD_KEEP", "LIB_PREBUILD_THREADS", "LOCALE", "LOD_GUARD", "MEMORY", "MENU_LANG", "MENU_TEST",
@@ -65,7 +65,7 @@ static const struct { const char *key, *section; } sections[] = {
     {"SHARPNESS", "display"}, {"DLAA", "display"}, {"DLSS_PRESET", "display"}, {"UPSCALE_MODE", "display"}, {"AA_UPSCALER", "display"}, {"SHADOW_RES", "display"}, {"FULL_RES", "display"}, {"ENGAGE_LOD", "display"}, {"MOVIE_16X9", "display"}, {"ULTRAWIDE_FOV", "display"}, {"RT_SUPERSAMPLE", "display"}, {"ASPECT", "display"}, {"FOV", "display"}, {"COLOR_PRESET", "display"},
     {"COLOR_BRIGHTNESS", "display"}, {"COLOR_CONTRAST", "display"}, {"COLOR_SATURATION", "display"},
     {"COLOR_GAMMA", "display"},
-    {"DEVICE_PROFILE", "display"}, {"ASSUME_FOCUS", "display"},
+    {"DEVICE_PROFILE", "display"}, {"ASSUME_FOCUS", "display"}, {"FAKE_ONLINE", "display"},
     {"MENU_LANG", "language"}, {"LANG", "language"}, {"OPERATION_MODE", "language"},
     {"VOLUME", "audio"}, {"MUTE_BACKGROUND", "audio"}, {"AMIIBO_AUTO_LIFT", "input"}, {"AMIIBO_DIR", "input"}, {"FAST_FORWARD", "frame rate"},
     {"MOTION", "input"}, {"RUMBLE_STRENGTH", "input"}, {"RUMBLE_CURVE", "input"}, {"RUMBLE_TRIGGERS", "input"},
@@ -120,6 +120,7 @@ static const CfgMeta metas[] = {
     {"LANG", "", "ja|en-US|fr|de|it|es|zh-CN|ko|nl|pt|ru|zh-TW|en-GB|fr-CA|es-419|zh-Hans|zh-Hant|pt-BR", RESTART},
     {"OPERATION_MODE", "docked", "docked|handheld", RESTART},
     {"ASSUME_FOCUS", "1", "0|1", LIVE},   // read on every focus change (ov_system.c)
+    {"FAKE_ONLINE", "0", "0|1", LIVE},   // read when a chapter map starts (engage_online.c)
     // Sound, Controls, Menu
     {"VOLUME", "100", "0..100", LIVE}, {"MUTE_BACKGROUND", "0", "0|1", LIVE}, {"AMIIBO_AUTO_LIFT", "1", "0|1", LIVE}, {"AMIIBO_DIR", "", NULL, LIVE}, {"FAST_FORWARD", "3", "2..4", LIVE},
     {"MOTION", "1", "0|1", LIVE}, {"RUMBLE_STRENGTH", "130", "0..300", LIVE}, {"RUMBLE_CURVE", "0.6", "0.2..1.5", LIVE},

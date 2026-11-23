@@ -18,5 +18,13 @@
 - **Amiibo**: F1 > Amiibo lists the dumps (540-byte `.bin` / `.nfc`) in `amiibo\` next to the exe (`amiibo_dir`
   overrides). Start the scan at the Somniel's amiibo gazebo, then pick one; it is lifted after 2.5 s unless "Lift it by
   itself" is off. `runtime/amiibo.c` (reader state), `ov_system.c` (nn::nfp), `ui/amiibo_tab.cpp`.
+- **Fake online** (experimental, off): F1 > Game (`fake_online`). Chapter maps get the online bonus spots (Kill /
+  Killed tiles, `MapKillBonus`) from random local counts on walkable play-area cells instead of the server.
+  `runtime/engage_online.c` hooks `MapSequenceNet.Download` (binds the download proc without the game's online byte,
+  so rankings, profiles and the clear-time upload stay offline) and `NexKillBonus.Download` (fills the grids, reports
+  success). Suspended maps keep their spots; a new chapter start rolls new ones. The chapter rankings (world map
+  menu > Ranking, last-chapter hub menu) open without the connect prompt (the menu items' `ACall` runs with the online
+  byte set, restored after) and `NexRanking.Download` returns 100 unit + Emblem pairs from the units and Emblems the
+  player has, seeded by the chapter id.
 
 amiibo.c and playtime.c are adapted from TotK Recomp (MIT).
