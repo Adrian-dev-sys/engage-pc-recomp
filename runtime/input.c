@@ -388,6 +388,7 @@ static void start(void) {
     if (!SDL_Init(SDL_INIT_GAMEPAD)) { state = -1; rt_log("input: SDL gamepad init failed (%s), keyboard only", SDL_GetError()); }
     else state = 1;
     if (state == 1) test_pad_attach();
+    if (state == 1) ds5_haptics_start();   // DualSense haptics stream (ds5_haptics.c), idle unless TOTK_HAPTICS
     if (state == 1) {
         scan_pads();
         if (!pad) rt_log("input: no gamepad (keyboard only until one is connected)");
@@ -685,4 +686,24 @@ void input_motion_start(void) {
         }
     }
     plat_mutex_unlock(&lock);
+}
+
+int input_pad_hid(char *path, size_t cap, uint16_t *vid, uint16_t *pid, int *wireless) {
+    int ok = 0;
+    plat_mutex_lock(&lock);
+    if (state == 1 && pad && SDL_GamepadConnected(pad)) {
+        const char *p = SDL_GetGamepadPath(pad);
+        snprintf(path, cap, "%s", p ? p : "");
+        *vid = SDL_GetGamepadVendor(pad), *pid = SDL_GetGamepadProduct(pad);
+        // SDL often reports UNKNOWN on Windows; a Bluetooth HID path names the HID-over-Bluetooth service or BTHENUM
+        SDL_JoystickConnectionState cs = SDL_GetGamepadConnectionState(pad);
+        int bt_path = p && (SDL_strcasestr(p, "00001124-0000-1000-8000-00805f9b34fb") || SDL_strcasestr(p, "bthenum") ||
+                            SDL_strcasestr(p, "bthledevice"));
+        *wireless = cs == SDL_JOYSTICK_CONNECTION_WIRELESS || (cs != SDL_JOYSTICK_CONNECTION_WIRED && bt_path);
+        static int logged;
+        if (!logged++) rt_log("input: gamepad connection %d (SDL: 1 wired, 2 wireless), HID path %s", (int)cs, p ? p : "-");
+        ok = p && *p;
+    }
+    plat_mutex_unlock(&lock);
+    return ok;
 }

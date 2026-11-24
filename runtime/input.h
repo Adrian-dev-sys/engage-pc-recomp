@@ -1,5 +1,6 @@
 // Host input sampling (runtime/input.c, with input_win.c or input_sdl.c): SDL3 gamepad and the keyboard as one Switch npad.
 #pragma once
+#include <stddef.h>
 #include <stdint.h>
 
 // Bits of libnx HidNpadButton (A=0 B=1 X=2 Y=3 StickL=4 StickR=5 L=6 R=7 ZL=8 ZR=9 Plus=10 Minus=11 Left=12 Up=13 Right=14
@@ -52,6 +53,13 @@ int input_rumble(uint16_t low, uint16_t high, uint32_t ms);
 uint16_t rumble_motor(float a, float curve, float strength);
 // TOTK_RUMBLE_TRIGGERS=1: input_rumble also drives the impulse triggers (Xbox) with the high motor's value.
 int input_rumble_triggers_enabled(void);
+// The open gamepad's HID path, USB ids and whether it is wireless; 0 when none is open. Any thread.
+int input_pad_hid(char *path, size_t cap, uint16_t *vid, uint16_t *pid, int *wireless);
+// DualSense haptics over Bluetooth (ds5_haptics.c): the stream thread, each side's latest HD rumble value, and 1 while
+// the stream owns the actuators (SDL rumble is then held at zero).
+void ds5_haptics_start(void);
+void ds5_haptics_set(int side, float amp_low, float freq_low, float amp_high, float freq_high, uint64_t now);
+int ds5_haptics_ready(void);
 
 // Motion (TOTK_MOTION=0 turns it off, live). input_motion_start starts the sensor thread once: every 4 ms it reads the
 // gamepad's gyro and accelerometer (when it has them) and feeds motion_global(). Callable from any thread.

@@ -322,6 +322,7 @@ static void rumble_update(uint64_t now) {
         if (l > light) light = l;
     }
     uint16_t lo = motor(clamp01(heavy)), hi = motor(clamp01(light));
+    if (ds5_haptics_ready()) lo = hi = 0;   // the DualSense's actuators play the waveforms (ds5_haptics.c)
     int changed = lo != sent_low || hi != sent_high, on = lo || hi;
     if (changed ? on && now - sent_at < RUMBLE_MIN_GAP_NS : !on || now - sent_at < RUMBLE_REFRESH_NS) return;
     input_rumble(lo, hi, on ? RUMBLE_MS : 0);
@@ -345,7 +346,11 @@ static void play(int side, const VibrationValue *v) {
     vib_last[side] = c;
     vib_at[side] = now;
     rumble_update(now);
+    int allowed = vib_allowed;
     plat_mutex_unlock(&vib_lock);
+    ds5_haptics_start();
+    if (allowed) ds5_haptics_set(side, c.amp_low, c.freq_low, c.amp_high, c.freq_high, now);
+    else ds5_haptics_set(side, 0, c.freq_low, 0, c.freq_high, now);
 }
 
 // Result detail::InitializeVibrationDevice(const VibrationDeviceHandle &)

@@ -213,6 +213,10 @@ static const char *const text_en[UI_TEXT_COUNT] = {
     [UI_MENU_RUMBLE_CURVE_DESC] = "Lower values make weak vibration stronger.",
     [UI_MENU_RUMBLE_TRIGGERS] = "Trigger vibration (Xbox)",
     [UI_MENU_RUMBLE_TRIGGERS_DESC] = "Vibrates the triggers of an Xbox controller too.",
+    [UI_MENU_HAPTICS] = "DualSense HD haptics (experimental)",
+    [UI_MENU_HAPTICS_DESC] = "The game's HD rumble plays as real waveforms on the DualSense's haptic actuators instead "
+                             "of emulated motor rumble, over Bluetooth or USB. Vibration strength and curve apply. Other "
+                             "controllers keep the usual rumble.",
     [UI_MENU_PAD_LAYOUT] = "Button layout",
     [UI_MENU_PAD_LAYOUT_DESC] = "Which button is A. Nintendo: the right one, as on a Switch. Xbox: the bottom one, as "
                                 "labelled on an Xbox controller (cross on a PlayStation controller). Automatic picks "
