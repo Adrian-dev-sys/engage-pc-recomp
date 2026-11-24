@@ -146,11 +146,11 @@ static void stream(void *arg) {
         int why = !on ? 0 : !have ? 1 : !is_dualsense(vid, pid) ? 2 : wireless ? 3 : 4;   // 3 Bluetooth, 4 USB
         if (why != logged_why) {
             static const char *const msg[] = {"off", "no gamepad", "the gamepad is not a DualSense",
-                                              "DualSense over Bluetooth", "DualSense over USB"};
+                                              "DualSense over Bluetooth (not supported yet: normal rumble stays)", "DualSense over USB"};
             rt_log("haptics: %s", msg[why]);
             logged_why = why;
         }
-        int mode = why >= 3 ? why : 0;
+        int mode = why == 4 ? 4 : 0;   // Bluetooth report 0x32 was not felt on Windows (2026-11-24): motors there
         if ((hid && (mode != 3 || strcmp(path, open_path))) || (aud && mode != 4)) {
             if (hid) SDL_hid_close(hid), hid = NULL;
             if (aud) SDL_DestroyAudioStream(aud), aud = NULL;

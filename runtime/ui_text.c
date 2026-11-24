@@ -215,7 +215,7 @@ static const char *const text_en[UI_TEXT_COUNT] = {
     [UI_MENU_RUMBLE_TRIGGERS_DESC] = "Vibrates the triggers of an Xbox controller too.",
     [UI_MENU_HAPTICS] = "DualSense HD haptics (experimental)",
     [UI_MENU_HAPTICS_DESC] = "The game's HD rumble plays as real waveforms on the DualSense's haptic actuators instead "
-                             "of emulated motor rumble, over Bluetooth or USB. Vibration strength and curve apply. Other "
+                             "of emulated motor rumble, over USB (Bluetooth keeps normal rumble). Vibration strength and curve apply. Other "
                              "controllers keep the usual rumble.",
     [UI_MENU_PAD_LAYOUT] = "Button layout",
     [UI_MENU_PAD_LAYOUT_DESC] = "Which button is A. Nintendo: the right one, as on a Switch. Xbox: the bottom one, as "

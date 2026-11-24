@@ -15,7 +15,7 @@ assistant (Claude) and tested by hand on one Windows PC with an NVIDIA GPU. Its 
 - Game speed fixes above 30 fps (cameras, animations), a larger memory pool for heavy mods.
 - Loading of mods made for [Cobalt](https://github.com/Raytwo/Cobalt): outfits, XML and text patches, sound banks,
   voices, Lua scripts, supports and custom sprites.
-- DualSense rumble and gyro aiming, and DualSense HD haptics over USB or Bluetooth (experimental, off by default).
+- DualSense rumble and gyro aiming, and DualSense HD haptics over USB (experimental, off by default; Bluetooth keeps normal rumble).
 - Fake online (off by default, no server): Spirits of the Fallen spots on chapter maps and the chapter rankings,
   from made-up local data.
 
